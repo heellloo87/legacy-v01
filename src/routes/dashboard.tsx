@@ -3,6 +3,12 @@ import { AppShell } from "@/components/AppShell";
 import {
   Plus, TrendingUp, Box, Users, Activity, MoreHorizontal, Bell, Sparkles,
 } from "lucide-react";
+import headsetImg from "@/assets/model-headset.jpg";
+import watchImg from "@/assets/model-watch.jpg";
+import droneImg from "@/assets/model-drone.jpg";
+import speakerImg from "@/assets/model-speaker.jpg";
+import gloveImg from "@/assets/model-glove.jpg";
+import cameraImg from "@/assets/model-camera.jpg";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Legacy AR" }] }),
@@ -17,12 +23,12 @@ const stats = [
 ];
 
 const projects = [
-  { name: "Helios Headset v3", cat: "Hardware", members: 5, progress: 78, color: "from-primary to-secondary" },
-  { name: "Neon Smartwatch", cat: "Wearable", members: 3, progress: 42, color: "from-secondary to-accent" },
-  { name: "Aether Drone", cat: "Robotics", members: 7, progress: 91, color: "from-accent to-primary" },
-  { name: "Quantum Speaker", cat: "Audio", members: 4, progress: 25, color: "from-primary to-accent" },
-  { name: "Pulse VR Glove", cat: "Wearable", members: 6, progress: 60, color: "from-secondary to-primary" },
-  { name: "Orbit Camera", cat: "Optics", members: 2, progress: 15, color: "from-accent to-secondary" },
+  { name: "Helios Headset v3", cat: "Hardware", members: 5, progress: 78, image: headsetImg },
+  { name: "Neon Smartwatch", cat: "Wearable", members: 3, progress: 42, image: watchImg },
+  { name: "Aether Drone", cat: "Robotics", members: 7, progress: 91, image: droneImg },
+  { name: "Quantum Speaker", cat: "Audio", members: 4, progress: 25, image: speakerImg },
+  { name: "Pulse VR Glove", cat: "Wearable", members: 6, progress: 60, image: gloveImg },
+  { name: "Orbit Camera", cat: "Optics", members: 2, progress: 15, image: cameraImg },
 ];
 
 const notifications = [
