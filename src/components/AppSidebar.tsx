@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, FolderPlus, Users, Box, Settings, LogOut, Sparkles, X,
+  LayoutDashboard, FolderPlus, Users, Box, Settings, LogOut, Sparkles, X, Wand2,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
