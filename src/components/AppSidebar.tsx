@@ -1,9 +1,10 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, FolderPlus, Users, Box, Settings, LogOut, Sparkles,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -14,6 +15,8 @@ const items = [
 
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const nav = useNavigate();
+  const { signOut } = useAuth();
   return (
     <aside className="hidden md:flex w-64 flex-col glass-strong border-r border-glass-border p-4 gap-2 sticky top-0 h-screen">
       <div className="px-2 py-3"><Logo /></div>
@@ -48,7 +51,13 @@ export function AppSidebar() {
 
       <div className="flex items-center justify-between px-2 pt-2">
         <Link to="/dashboard" className="text-muted-foreground hover:text-foreground p-2"><Settings className="h-4 w-4" /></Link>
-        <Link to="/login" className="text-muted-foreground hover:text-destructive p-2"><LogOut className="h-4 w-4" /></Link>
+        <button
+          onClick={async () => { await signOut(); nav({ to: "/login" }); }}
+          className="text-muted-foreground hover:text-destructive p-2"
+          title="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </aside>
   );
