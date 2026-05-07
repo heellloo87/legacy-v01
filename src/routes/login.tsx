@@ -1,7 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { AuthLayout } from "@/components/AuthLayout";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — Legacy AR" }] }),
@@ -10,7 +12,28 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const nav = useNavigate();
+  const { signIn, session, loading } = useAuth();
   const [remember, setRemember] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && session) nav({ to: "/dashboard" });
+  }, [loading, session, nav]);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    const { error } = await signIn(email, password);
+    setSubmitting(false);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    toast.success("Welcome back!");
+    nav({ to: "/dashboard" });
+  };
 
   return (
     <AuthLayout
@@ -18,12 +41,11 @@ function LoginPage() {
       subtitle="Sign in to your Legacy AR workspace"
       footer={<>Don't have an account? <Link to="/register" className="text-accent hover:underline">Create one</Link></>}
     >
-      <form
-        className="space-y-4"
-        onSubmit={(e) => { e.preventDefault(); nav({ to: "/dashboard" }); }}
-      >
-        <Field icon={<Mail className="h-4 w-4" />} type="email" placeholder="you@company.com" label="Email" />
-        <Field icon={<Lock className="h-4 w-4" />} type="password" placeholder="••••••••" label="Password" />
+      <form className="space-y-4" onSubmit={onSubmit}>
+        <Field icon={<Mail className="h-4 w-4" />} type="email" placeholder="you@company.com" label="Email"
+          value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <Field icon={<Lock className="h-4 w-4" />} type="password" placeholder="••••••••" label="Password"
+          value={password} onChange={(e) => setPassword(e.target.value)} required />
 
         <div className="flex items-center justify-between text-xs">
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -40,20 +62,11 @@ function LoginPage() {
 
         <button
           type="submit"
-          className="w-full py-3 rounded-xl bg-gradient-primary text-white font-medium inline-flex items-center justify-center gap-2 shadow-[0_0_30px_-8px_oklch(0.65_0.24_295/70%)] hover:shadow-[0_0_50px_-8px_oklch(0.78_0.18_200/70%)] transition-shadow"
+          disabled={submitting}
+          className="w-full py-3 rounded-xl bg-gradient-primary text-white font-medium inline-flex items-center justify-center gap-2 shadow-[0_0_30px_-8px_oklch(0.65_0.24_295/70%)] hover:shadow-[0_0_50px_-8px_oklch(0.78_0.18_200/70%)] transition-shadow disabled:opacity-60"
         >
-          Sign in <ArrowRight className="h-4 w-4" />
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Sign in <ArrowRight className="h-4 w-4" /></>}
         </button>
-
-        <div className="relative my-2 text-center text-xs text-muted-foreground">
-          <span className="bg-card/0 px-2 relative z-10">or continue with</span>
-          <div className="absolute inset-x-0 top-1/2 h-px bg-glass-border" />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" className="glass rounded-xl py-2.5 text-sm hover:bg-white/10">Google</button>
-          <button type="button" className="glass rounded-xl py-2.5 text-sm hover:bg-white/10">GitHub</button>
-        </div>
       </form>
     </AuthLayout>
   );
