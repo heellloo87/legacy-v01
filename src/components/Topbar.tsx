@@ -1,10 +1,19 @@
-import { Bell, Search } from "lucide-react";
+import { Bell, Search, Menu } from "lucide-react";
+import { useSidebar } from "./sidebar-context";
 
 export function Topbar({ title }: { title: string }) {
+  const { toggle } = useSidebar();
   return (
-    <header className="sticky top-0 z-20 glass-strong border-b border-glass-border px-6 py-3 flex items-center gap-4">
-      <h1 className="text-lg font-display font-semibold">{title}</h1>
-      <div className="ml-auto flex items-center gap-3">
+    <header className="sticky top-0 z-20 glass-strong border-b border-glass-border px-4 sm:px-6 py-3 flex items-center gap-3">
+      <button
+        onClick={toggle}
+        className="glass rounded-xl p-2.5 hover:bg-white/10 transition"
+        aria-label="Toggle menu"
+      >
+        <Menu className="h-4 w-4" />
+      </button>
+      <h1 className="text-lg font-display font-semibold truncate">{title}</h1>
+      <div className="ml-auto flex items-center gap-2 sm:gap-3">
         <div className="hidden md:flex items-center gap-2 glass rounded-xl px-3 py-2 w-72">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input placeholder="Search projects, files…" className="bg-transparent outline-none text-sm w-full" />
