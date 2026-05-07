@@ -86,8 +86,8 @@ function DroneModel({ wireframe }: { wireframe: boolean }) {
       {/* Arms + propellers */}
       {[[-1,-1],[1,-1],[-1,1],[1,1]].map(([x,z], i) => (
         <group key={i} position={[x*0.9, 0.1, z*0.9]}>
-          <mesh>
-            <cylinderGeometry args={[0.05, 0.05, 1.0, 12]} rotation={[0, 0, Math.PI/2]} />
+          <mesh rotation={[0, 0, Math.PI/2]}>
+            <cylinderGeometry args={[0.05, 0.05, 1.0, 12]} />
             <meshStandardMaterial color="#2a1c4a" {...mat} />
           </mesh>
           <mesh position={[0, 0.15, 0]}>
