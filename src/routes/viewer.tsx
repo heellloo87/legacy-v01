@@ -1,53 +1,164 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, Float, MeshDistortMaterial } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, Environment, Float, ContactShadows } from "@react-three/drei";
 import {
   Maximize2, ZoomIn, ZoomOut, RotateCw, Layers, Sun, Ruler, Grid3x3, Download, Share2,
 } from "lucide-react";
 import { useRef, useState, Suspense } from "react";
-import type { Mesh } from "three";
-import { useFrame } from "@react-three/fiber";
+import type { Group } from "three";
 
 export const Route = createFileRoute("/viewer")({
   head: () => ({ meta: [{ title: "3D Viewer — Legacy AR" }] }),
   component: Viewer,
 });
 
-function Model({ wireframe }: { wireframe: boolean }) {
-  const ref = useRef<Mesh>(null!);
-  useFrame((_, dt) => {
-    if (ref.current) ref.current.rotation.y += dt * 0.3;
-  });
+/* ---------- Models ---------- */
+
+function HeadsetModel({ wireframe }: { wireframe: boolean }) {
+  const ref = useRef<Group>(null!);
+  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * 0.35; });
+  const matte = { metalness: 0.6, roughness: 0.35, wireframe };
   return (
-    <Float speed={2} rotationIntensity={0.4} floatIntensity={1.2}>
-      <mesh ref={ref} castShadow>
-        <icosahedronGeometry args={[1.4, 4]} />
-        <MeshDistortMaterial
-          color="#a855f7"
-          emissive="#22d3ee"
-          emissiveIntensity={0.4}
-          metalness={0.85}
-          roughness={0.15}
-          distort={0.35}
-          speed={1.5}
-          wireframe={wireframe}
-        />
+    <group ref={ref}>
+      {/* Main visor body */}
+      <mesh castShadow position={[0, 0.1, 0]}>
+        <boxGeometry args={[2.6, 1.0, 0.9]} />
+        <meshStandardMaterial color="#1a1030" {...matte} />
       </mesh>
-    </Float>
+      {/* Front glossy lens panel */}
+      <mesh position={[0, 0.1, 0.46]}>
+        <boxGeometry args={[2.45, 0.85, 0.05]} />
+        <meshPhysicalMaterial color="#0a0418" emissive="#22d3ee" emissiveIntensity={0.6} metalness={1} roughness={0.05} clearcoat={1} wireframe={wireframe} />
+      </mesh>
+      {/* Lens highlights */}
+      <mesh position={[-0.55, 0.15, 0.49]}>
+        <circleGeometry args={[0.28, 32]} />
+        <meshBasicMaterial color="#a855f7" />
+      </mesh>
+      <mesh position={[0.55, 0.15, 0.49]}>
+        <circleGeometry args={[0.28, 32]} />
+        <meshBasicMaterial color="#22d3ee" />
+      </mesh>
+      {/* Top accent strip */}
+      <mesh position={[0, 0.62, 0.2]}>
+        <boxGeometry args={[2.2, 0.08, 0.5]} />
+        <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={0.5} {...matte} />
+      </mesh>
+      {/* Side straps */}
+      <mesh position={[-1.45, 0.1, -0.15]} rotation={[0, 0, 0]}>
+        <torusGeometry args={[0.55, 0.07, 16, 32, Math.PI]} />
+        <meshStandardMaterial color="#2a1c4a" {...matte} />
+      </mesh>
+      <mesh position={[1.45, 0.1, -0.15]} rotation={[0, Math.PI, 0]}>
+        <torusGeometry args={[0.55, 0.07, 16, 32, Math.PI]} />
+        <meshStandardMaterial color="#2a1c4a" {...matte} />
+      </mesh>
+      {/* Nose cutout shadow piece */}
+      <mesh position={[0, -0.42, 0.4]}>
+        <boxGeometry args={[0.5, 0.2, 0.2]} />
+        <meshStandardMaterial color="#0a0418" {...matte} />
+      </mesh>
+    </group>
   );
 }
+
+function DroneModel({ wireframe }: { wireframe: boolean }) {
+  const ref = useRef<Group>(null!);
+  const propsRef = useRef<Group>(null!);
+  useFrame((_, dt) => {
+    if (ref.current) ref.current.rotation.y += dt * 0.3;
+    if (propsRef.current) propsRef.current.rotation.y += dt * 25;
+  });
+  const mat = { metalness: 0.7, roughness: 0.3, wireframe };
+  return (
+    <group ref={ref}>
+      {/* Body */}
+      <mesh castShadow>
+        <sphereGeometry args={[0.55, 32, 32]} />
+        <meshStandardMaterial color="#1a1030" {...mat} />
+      </mesh>
+      {/* Camera lens */}
+      <mesh position={[0, -0.15, 0.45]}>
+        <cylinderGeometry args={[0.18, 0.18, 0.18, 32]} rotation={[Math.PI/2,0,0]} />
+        <meshPhysicalMaterial color="#0a0418" emissive="#22d3ee" emissiveIntensity={0.8} metalness={1} roughness={0.05} />
+      </mesh>
+      {/* Arms + propellers */}
+      {[[-1,-1],[1,-1],[-1,1],[1,1]].map(([x,z], i) => (
+        <group key={i} position={[x*0.9, 0.1, z*0.9]}>
+          <mesh>
+            <cylinderGeometry args={[0.05, 0.05, 1.0, 12]} rotation={[0, 0, Math.PI/2]} />
+            <meshStandardMaterial color="#2a1c4a" {...mat} />
+          </mesh>
+          <mesh position={[0, 0.15, 0]}>
+            <cylinderGeometry args={[0.18, 0.18, 0.08, 16]} />
+            <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={0.4} {...mat} />
+          </mesh>
+          <group ref={i===0 ? propsRef : undefined} position={[0, 0.22, 0]}>
+            <mesh>
+              <boxGeometry args={[0.7, 0.02, 0.08]} />
+              <meshStandardMaterial color="#22d3ee" emissive="#22d3ee" emissiveIntensity={0.3} transparent opacity={0.8} {...mat} />
+            </mesh>
+          </group>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function WatchModel({ wireframe }: { wireframe: boolean }) {
+  const ref = useRef<Group>(null!);
+  useFrame((_, dt) => { if (ref.current) ref.current.rotation.y += dt * 0.4; });
+  const mat = { metalness: 0.85, roughness: 0.2, wireframe };
+  return (
+    <group ref={ref} rotation={[0.3, 0, 0]}>
+      {/* Case */}
+      <mesh castShadow>
+        <cylinderGeometry args={[0.9, 0.9, 0.3, 64]} />
+        <meshStandardMaterial color="#2a1c4a" {...mat} />
+      </mesh>
+      {/* Screen */}
+      <mesh position={[0, 0.16, 0]}>
+        <cylinderGeometry args={[0.78, 0.78, 0.02, 64]} />
+        <meshPhysicalMaterial color="#0a0418" emissive="#22d3ee" emissiveIntensity={0.5} metalness={1} roughness={0.05} clearcoat={1} />
+      </mesh>
+      {/* Crown */}
+      <mesh position={[0.95, 0, 0]} rotation={[0, 0, Math.PI/2]}>
+        <cylinderGeometry args={[0.08, 0.08, 0.18, 24]} />
+        <meshStandardMaterial color="#a855f7" emissive="#a855f7" emissiveIntensity={0.4} {...mat} />
+      </mesh>
+      {/* Straps */}
+      {[1, -1].map((s) => (
+        <mesh key={s} position={[0, -0.05, s * 1.2]}>
+          <boxGeometry args={[1.4, 0.2, 1.2]} />
+          <meshStandardMaterial color="#1a1030" {...mat} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+const MODELS = {
+  headset: { name: "Helios Headset", component: HeadsetModel, vertices: "24,812", faces: "12,406" },
+  drone: { name: "Aero Drone X1", component: DroneModel, vertices: "18,440", faces: "9,220" },
+  watch: { name: "Pulse Watch", component: WatchModel, vertices: "14,902", faces: "7,451" },
+} as const;
+type ModelKey = keyof typeof MODELS;
+
+/* ---------- Page ---------- */
 
 function Viewer() {
   const [zoom, setZoom] = useState(5);
   const [wireframe, setWireframe] = useState(false);
+  const [modelKey, setModelKey] = useState<ModelKey>("headset");
+  const Model = MODELS[modelKey].component;
 
   return (
     <AppShell title="3D Viewer">
       <div className="grid lg:grid-cols-12 gap-6 h-[calc(100vh-9rem)]">
         <section className="lg:col-span-9 glass-strong rounded-3xl p-3 relative overflow-hidden">
           <div className="absolute top-5 left-5 z-10 flex items-center gap-2">
-            <span className="glass rounded-lg px-3 py-1.5 text-xs">Helios Core · v14</span>
+            <span className="glass rounded-lg px-3 py-1.5 text-xs">{MODELS[modelKey].name} · v14</span>
             <span className="glass rounded-lg px-2 py-1.5 text-[10px] text-accent inline-flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> LIVE</span>
           </div>
           <div className="absolute top-5 right-5 z-10 flex items-center gap-2">
@@ -58,13 +169,17 @@ function Viewer() {
 
           <div className="h-full w-full rounded-2xl overflow-hidden grid-bg relative">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/15 via-transparent to-accent/15" />
-            <Canvas camera={{ position: [0, 0, zoom], fov: 50 }} shadows dpr={[1, 2]}>
-              <ambientLight intensity={0.4} />
-              <pointLight position={[5, 5, 5]} intensity={1.2} color="#a855f7" />
-              <pointLight position={[-5, -3, -3]} intensity={0.8} color="#22d3ee" />
+            <Canvas camera={{ position: [0, 0.6, zoom], fov: 50 }} shadows dpr={[1, 2]}>
+              <ambientLight intensity={0.5} />
+              <pointLight position={[5, 5, 5]} intensity={1.4} color="#a855f7" />
+              <pointLight position={[-5, -3, -3]} intensity={0.9} color="#22d3ee" />
+              <spotLight position={[0, 6, 4]} intensity={1.2} angle={0.5} penumbra={0.5} castShadow />
               <Suspense fallback={null}>
-                <Model wireframe={wireframe} />
-                <Environment preset="night" />
+                <Float speed={1.3} rotationIntensity={0.15} floatIntensity={0.6}>
+                  <Model wireframe={wireframe} />
+                </Float>
+                <ContactShadows position={[0, -1.1, 0]} opacity={0.5} scale={8} blur={2.4} far={3} />
+                <Environment preset="city" />
               </Suspense>
               <OrbitControls enablePan enableZoom enableRotate />
             </Canvas>
@@ -87,13 +202,28 @@ function Viewer() {
         <aside className="lg:col-span-3 glass-strong rounded-3xl p-5 overflow-y-auto space-y-5">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Object</div>
-            <h3 className="font-display font-semibold text-lg mt-1">Helios Core</h3>
-            <p className="text-xs text-muted-foreground">Adaptive lens module · Iteration 14</p>
+            <h3 className="font-display font-semibold text-lg mt-1">{MODELS[modelKey].name}</h3>
+            <p className="text-xs text-muted-foreground">Adaptive prototype · Iteration 14</p>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Switch Model</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(Object.keys(MODELS) as ModelKey[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setModelKey(k)}
+                  className={`text-[11px] py-2 rounded-lg capitalize transition ${modelKey === k ? "bg-gradient-primary text-white" : "glass text-muted-foreground hover:text-foreground"}`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <Spec label="Vertices" value="24,812" />
-            <Spec label="Faces" value="12,406" />
+            <Spec label="Vertices" value={MODELS[modelKey].vertices} />
+            <Spec label="Faces" value={MODELS[modelKey].faces} />
             <Spec label="Materials" value="3" />
             <Spec label="Size" value="4.8 MB" />
           </div>
