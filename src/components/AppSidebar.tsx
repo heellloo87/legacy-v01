@@ -11,6 +11,7 @@ const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Create Project", url: "/projects/new", icon: FolderPlus },
   { title: "Workspace", url: "/workspace", icon: Users },
+  { title: "AI Generate", url: "/generate", icon: Wand2 },
   { title: "3D Viewer", url: "/viewer", icon: Box },
 ];
 
