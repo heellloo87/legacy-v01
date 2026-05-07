@@ -79,8 +79,8 @@ function DroneModel({ wireframe }: { wireframe: boolean }) {
         <meshStandardMaterial color="#1a1030" {...mat} />
       </mesh>
       {/* Camera lens */}
-      <mesh position={[0, -0.15, 0.45]}>
-        <cylinderGeometry args={[0.18, 0.18, 0.18, 32]} rotation={[Math.PI/2,0,0]} />
+      <mesh position={[0, -0.15, 0.45]} rotation={[Math.PI/2, 0, 0]}>
+        <cylinderGeometry args={[0.18, 0.18, 0.18, 32]} />
         <meshPhysicalMaterial color="#0a0418" emissive="#22d3ee" emissiveIntensity={0.8} metalness={1} roughness={0.05} />
       </mesh>
       {/* Arms + propellers */}
