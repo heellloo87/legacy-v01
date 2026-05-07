@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import {
-  Send, Upload, Heart, MessageSquare, Share2, Eye, History, Box, Users, Tag, Calendar,
+  Send, Upload, Heart, MessageSquare, Share2, Eye, History, Users, Tag, Calendar,
 } from "lucide-react";
+import headsetImg from "@/assets/model-headset.jpg";
 
 export const Route = createFileRoute("/workspace")({
   head: () => ({ meta: [{ title: "Workspace — Legacy AR" }] }),
@@ -21,8 +22,9 @@ function Workspace() {
       <div className="grid lg:grid-cols-12 gap-6 h-[calc(100vh-9rem)]">
         {/* Left: project info */}
         <aside className="lg:col-span-3 glass-strong rounded-3xl p-5 overflow-y-auto">
-          <div className="h-32 rounded-2xl bg-gradient-primary/40 grid-bg relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/40 to-accent/30" />
+          <div className="h-32 rounded-2xl relative overflow-hidden">
+            <img src={headsetImg} alt="Helios Headset" loading="lazy" width={1024} height={768} className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-card/90 via-transparent to-transparent" />
           </div>
           <h3 className="mt-4 font-display font-semibold text-lg">Helios Headset v3</h3>
           <p className="text-xs text-muted-foreground mt-1">Next-gen AR headset prototype with adaptive lenses.</p>
@@ -66,14 +68,13 @@ function Workspace() {
             </div>
           </div>
 
-          <div className="flex-1 mt-4 rounded-2xl grid-bg relative overflow-hidden grid place-items-center">
+          <div className="flex-1 mt-4 rounded-2xl relative overflow-hidden grid place-items-center">
+            <img src={headsetImg} alt="Helios Headset preview" loading="lazy" width={1024} height={768} className="absolute inset-0 h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-accent/20" />
-            <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-primary/30 blur-3xl" />
-            <div className="absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
-            <div className="relative animate-float">
-              <div className="h-40 w-40 rounded-3xl bg-gradient-primary grid place-items-center glow">
-                <Box className="h-20 w-20 text-white" />
-              </div>
+            <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-primary/30 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-accent/20 blur-3xl pointer-events-none" />
+            <div className="relative animate-float pointer-events-none">
+              <div className="h-2 w-2" />
             </div>
             <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-xs">
               <span className="glass rounded-lg px-3 py-1.5">1920 × 1080</span>
