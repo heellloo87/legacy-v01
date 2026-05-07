@@ -84,8 +84,9 @@ function Dashboard() {
             <div className="grid sm:grid-cols-2 gap-4">
               {projects.map((p) => (
                 <div key={p.name} className="glass rounded-2xl p-4 hover:border-accent/30 transition group">
-                  <div className={`h-28 rounded-xl bg-gradient-to-br ${p.color} grid-bg relative overflow-hidden`}>
-                    <div className="absolute inset-0 bg-black/20" />
+                  <div className="h-32 rounded-xl relative overflow-hidden">
+                    <img src={p.image} alt={p.name} loading="lazy" width={1024} height={768} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent" />
                     <div className="absolute top-2 right-2 glass rounded-md p-1"><MoreHorizontal className="h-3.5 w-3.5" /></div>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
