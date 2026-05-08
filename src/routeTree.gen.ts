@@ -15,6 +15,8 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GenerateRouteImport } from './routes/generate'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
 
@@ -48,6 +50,16 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -68,6 +80,8 @@ export interface FileRoutesByFullPath {
   '/viewer': typeof ViewerRoute
   '/workspace': typeof WorkspaceRoute
   '/projects/new': typeof ProjectsNewRoute
+  '/admin': typeof AdminRoute
+  '/admin/users': typeof AdminUsersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +92,8 @@ export interface FileRoutesByTo {
   '/viewer': typeof ViewerRoute
   '/workspace': typeof WorkspaceRoute
   '/projects/new': typeof ProjectsNewRoute
+  '/admin': typeof AdminRoute
+  '/admin/users': typeof AdminUsersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +105,8 @@ export interface FileRoutesById {
   '/viewer': typeof ViewerRoute
   '/workspace': typeof WorkspaceRoute
   '/projects/new': typeof ProjectsNewRoute
+  '/admin': typeof AdminRoute
+  '/admin/users': typeof AdminUsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +119,8 @@ export interface FileRouteTypes {
     | '/viewer'
     | '/workspace'
     | '/projects/new'
+    | '/admin'
+    | '/admin/users'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +131,8 @@ export interface FileRouteTypes {
     | '/viewer'
     | '/workspace'
     | '/projects/new'
+    | '/admin'
+    | '/admin/users'
   id:
     | '__root__'
     | '/'
@@ -121,6 +143,8 @@ export interface FileRouteTypes {
     | '/viewer'
     | '/workspace'
     | '/projects/new'
+    | '/admin'
+    | '/admin/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +156,7 @@ export interface RootRouteChildren {
   ViewerRoute: typeof ViewerRoute
   WorkspaceRoute: typeof WorkspaceRoute
   ProjectsNewRoute: typeof ProjectsNewRoute
+  AdminRoute: typeof AdminRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,8 +217,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
+
+const AdminRouteChildren = {
+  AdminUsersRoute: AdminUsersRoute,
+}
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -204,6 +248,7 @@ const rootRouteChildren: RootRouteChildren = {
   ViewerRoute: ViewerRoute,
   WorkspaceRoute: WorkspaceRoute,
   ProjectsNewRoute: ProjectsNewRoute,
+  AdminRoute: AdminRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
