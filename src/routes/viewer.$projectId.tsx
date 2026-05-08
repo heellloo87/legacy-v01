@@ -62,8 +62,8 @@ function ProtectedViewer() {
       roles={[
         "admin",
         "designer",
-        "engineer",
-        "viewer",
+        "collaborator",
+        "manufacturing_expert",
       ]}
     >
       <Viewer />
