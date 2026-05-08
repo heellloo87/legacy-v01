@@ -1,4 +1,4 @@
-
+// Drop this file into src/hooks/useComments.ts
 // Handles comments scoped to a specific project + version
 
 import { useEffect } from "react";
@@ -41,9 +41,11 @@ export function useComments(
 
       const { data, error } = await q;
       if (error) throw error;
-      return data as Comment[];
+      return (data ?? []) as Comment[];
     },
     enabled: !!projectId,
+    // Keep showing old comments while switching versions instead of flashing empty
+    placeholderData: (prev: Comment[] | undefined) => prev,
   });
 
   // Realtime — new comment on this project → refetch
@@ -114,7 +116,7 @@ export function useCommentCountsByVersion(projectId: string | undefined) {
 
       // Count per version
       const counts: Record<string, number> = {};
-      data.forEach((c) => {
+      (data ?? []).forEach((c) => {
         counts[c.version] = (counts[c.version] ?? 0) + 1;
       });
       return counts;
