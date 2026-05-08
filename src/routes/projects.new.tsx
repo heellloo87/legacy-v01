@@ -1,9 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
-import { Upload, Save, Box, ChevronDown, Image as ImageIcon, X } from "lucide-react";
+import { Upload, Save, Box, ChevronDown, Image as ImageIcon, X, Loader2 } from "lucide-react";
 import { useState, useRef, useEffect, Suspense, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, Stage, useGLTF, Center } from "@react-three/drei";
+import { OrbitControls, Stage, useGLTF, Center } from "@react-three/drei";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/projects/new")({
   head: () => ({ meta: [{ title: "Create Project — Legacy AR" }] }),
@@ -15,13 +18,19 @@ const MODEL_EXT = ["glb", "gltf"];
 const IMAGE_EXT = ["png", "jpg", "jpeg", "webp"];
 
 type UploadedFile = { file: File; url: string; ext: string };
+type Visibility = "Private" | "Team" | "Public";
 
 function NewProject() {
-  const [title, setTitle] = useState("Untitled AR Project");
-  const [desc, setDesc] = useState("");
-  const [cat, setCat] = useState("Hardware");
-  const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const nav = useNavigate();
+  const { user } = useAuth();
+
+  const [title, setTitle]           = useState("Untitled AR Project");
+  const [desc, setDesc]             = useState("");
+  const [cat, setCat]               = useState("Hardware");
+  const [visibility, setVisibility] = useState<Visibility>("Team");
+  const [uploaded, setUploaded]     = useState<UploadedFile | null>(null);
+  const [dragOver, setDragOver]     = useState(false);
+  const [saving, setSaving]         = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { if (uploaded) URL.revokeObjectURL(uploaded.url); }, [uploaded]);
@@ -31,11 +40,38 @@ function NewProject() {
     const file = files[0];
     const ext = file.name.split(".").pop()?.toLowerCase() || "";
     if (![...MODEL_EXT, ...IMAGE_EXT, "obj"].includes(ext)) {
-      alert(`Unsupported file: .${ext}\nSupported: ${ACCEPTED}`);
+      alert(`Unsupported file: .${ext}`);
       return;
     }
     if (uploaded) URL.revokeObjectURL(uploaded.url);
     setUploaded({ file, url: URL.createObjectURL(file), ext });
+  };
+
+  const handleSave = async (status: "active" | "draft") => {
+    if (!title.trim()) { toast.error("Project title is required"); return; }
+    if (!user) { toast.error("You must be logged in"); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .insert({
+          user_id:     user.id,
+          name:        title.trim(),
+          description: desc.trim() || null,
+          category:    cat,
+          visibility:  visibility.toLowerCase(),
+          status,
+          progress:    0,
+          version:     "v1",
+        });
+      if (error) throw error;
+      toast.success(status === "draft" ? "Saved as draft!" : "Project created!");
+      nav({ to: "/dashboard" });
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save project");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const isModel = uploaded && MODEL_EXT.includes(uploaded.ext);
@@ -45,6 +81,7 @@ function NewProject() {
     <AppShell title="Create Project">
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 glass-strong rounded-3xl p-6 space-y-5">
+
           <div>
             <label className="text-xs text-muted-foreground">Project title</label>
             <input
@@ -72,7 +109,7 @@ function NewProject() {
                 <select
                   value={cat}
                   onChange={(e) => setCat(e.target.value)}
-                  className="w-full glass rounded-xl px-4 py-3 bg-transparent outline-none appearance-none focus:ring-1 focus:ring-accent/60"
+                  className="w-full glass rounded-xl px-4 py-3 bg-transparent outline-none appearance-none focus:ring-1 focus:ring-accent/60 cursor-pointer"
                 >
                   {["Hardware", "Wearable", "Robotics", "Audio", "Optics", "Architecture"].map((c) => (
                     <option key={c} value={c} className="bg-popover">{c}</option>
@@ -81,11 +118,23 @@ function NewProject() {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               </div>
             </div>
+
             <div>
               <label className="text-xs text-muted-foreground">Visibility</label>
               <div className="mt-1.5 glass rounded-xl flex p-1">
-                {["Private", "Team", "Public"].map((v, i) => (
-                  <button key={v} className={`flex-1 py-2 rounded-lg text-xs ${i === 1 ? "bg-gradient-primary text-white" : "text-muted-foreground"}`}>{v}</button>
+                {(["Private", "Team", "Public"] as Visibility[]).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setVisibility(v)}
+                    className={`flex-1 py-2 rounded-lg text-xs transition cursor-pointer ${
+                      visibility === v
+                        ? "bg-gradient-primary text-white"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {v}
+                  </button>
                 ))}
               </div>
             </div>
@@ -104,11 +153,7 @@ function NewProject() {
               onClick={() => inputRef.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                handleFiles(e.dataTransfer.files);
-              }}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
               className={`mt-1.5 glass rounded-2xl border border-dashed p-8 text-center transition cursor-pointer ${
                 dragOver ? "border-accent bg-accent/10" : "border-glass-border hover:bg-white/5"
               }`}
@@ -127,6 +172,7 @@ function NewProject() {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); URL.revokeObjectURL(uploaded.url); setUploaded(null); }}
                     className="glass rounded-lg p-2 hover:bg-white/10"
                   >
@@ -135,27 +181,40 @@ function NewProject() {
                 </div>
               ) : (
                 <>
-                  <div className="h-12 w-12 mx-auto rounded-xl bg-gradient-primary grid place-items-center mb-3"><Upload className="h-5 w-5" /></div>
+                  <div className="h-12 w-12 mx-auto rounded-xl bg-gradient-primary grid place-items-center mb-3">
+                    <Upload className="h-5 w-5" />
+                  </div>
                   <div className="text-sm">Drop your 3D model, image, or .glb file</div>
                   <div className="text-xs text-muted-foreground mt-1">Supports .glb, .gltf, .obj, .png, .jpg up to 50MB</div>
-                  <button type="button" className="mt-4 px-4 py-2 rounded-xl glass text-xs hover:bg-white/10">Browse files</button>
+                  <button type="button" className="mt-4 px-4 py-2 rounded-xl glass text-xs hover:bg-white/10">
+                    Browse files
+                  </button>
                 </>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2">
-              Tip: For instant 3D preview, upload <span className="text-accent">.glb</span> or <span className="text-accent">.gltf</span>. Images preview as flat assets; .obj uploads are stored but not rendered live.
-            </p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <button className="px-5 py-2.5 rounded-xl bg-gradient-primary text-white inline-flex items-center gap-2 shadow-[0_0_30px_-8px_oklch(0.65_0.24_295/70%)]">
-              <Save className="h-4 w-4" /> Save project
+            <button
+              type="button"
+              onClick={() => handleSave("active")}
+              disabled={saving}
+              className="px-5 py-2.5 rounded-xl bg-gradient-primary text-white inline-flex items-center gap-2 shadow-[0_0_30px_-8px_oklch(0.65_0.24_295/70%)] disabled:opacity-60 cursor-pointer"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {saving ? "Saving…" : "Save project"}
             </button>
-            <button className="px-5 py-2.5 rounded-xl glass text-sm">Save as draft</button>
+            <button
+              type="button"
+              onClick={() => handleSave("draft")}
+              disabled={saving}
+              className="px-5 py-2.5 rounded-xl glass text-sm disabled:opacity-60 cursor-pointer hover:bg-white/10 transition"
+            >
+              Save as draft
+            </button>
           </div>
         </div>
 
-        {/* Preview */}
         <div className="glass rounded-3xl p-5">
           <div className="text-xs text-muted-foreground mb-3">Live preview</div>
           <div className="relative h-72 rounded-2xl bg-gradient-primary/20 grid-bg overflow-hidden">
@@ -182,10 +241,11 @@ function NewProject() {
             )}
           </div>
           <div className="mt-4 space-y-3 text-sm">
-            <Row label="Title" value={title || "—"} />
-            <Row label="Category" value={cat} />
-            <Row label="Status" value={<span className="text-accent">Draft</span>} />
-            <Row label="Assets" value={
+            <Row label="Title"      value={title || "—"} />
+            <Row label="Category"   value={cat} />
+            <Row label="Visibility" value={visibility} />
+            <Row label="Status"     value={<span className="text-accent">Draft</span>} />
+            <Row label="Assets"     value={
               <span className="inline-flex items-center gap-1">
                 <ImageIcon className="h-3 w-3" /> {uploaded ? "1 file" : "0 files"}
               </span>
