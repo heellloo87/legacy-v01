@@ -16,8 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 type UserRole =
   | "admin"
   | "designer"
-  | "collaborator"
-  | "manufacturing_expert";
+  | "engineer"
+  | "viewer";
 
 type AuthCtx = {
   session: Session | null;
@@ -57,12 +57,14 @@ export function AuthProvider({
   const [loading, setLoading] =
     useState(true);
 
+  /* ---------- Auth listener ---------- */
+
   useEffect(() => {
     const {
       data: sub,
     } = supabase.auth.onAuthStateChange(
-      (_e, s) => {
-        setSession(s);
+      (_event, session) => {
+        setSession(session);
       }
     );
 
@@ -70,31 +72,48 @@ export function AuthProvider({
       .getSession()
       .then(({ data }) => {
         setSession(data.session);
-        setLoading(false);
       });
 
-    return () =>
+    return () => {
       sub.subscription.unsubscribe();
+    };
   }, []);
 
-  useEffect(() => {
-    if (!session?.user) {
-      setRole(null);
-      return;
-    }
+  /* ---------- Load role ---------- */
 
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single()
-      .then(({ data }) => {
+  useEffect(() => {
+    const loadRole = async () => {
+      if (!session?.user) {
+        setRole(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+
+      if (error) {
+        console.error(error);
+        setRole("viewer");
+      } else {
         setRole(
           (data?.role as UserRole) ??
-            "designer"
+            "viewer"
         );
-      });
+      }
+
+      setLoading(false);
+    };
+
+    loadRole();
   }, [session]);
+
+  /* ---------- Sign in ---------- */
 
   const signIn: AuthCtx["signIn"] =
     async (email, password) => {
@@ -111,13 +130,15 @@ export function AuthProvider({
         : {};
     };
 
+  /* ---------- Sign up ---------- */
+
   const signUp: AuthCtx["signUp"] =
     async (
       email,
       password,
       fullName
     ) => {
-      const { error } =
+      const { data, error } =
         await supabase.auth.signUp({
           email,
           password,
@@ -129,10 +150,33 @@ export function AuthProvider({
           },
         });
 
-      return error
-        ? { error: error.message }
-        : {};
+      if (error) {
+        return {
+          error: error.message,
+        };
+      }
+
+      const userId = data.user?.id;
+
+      if (userId) {
+        const { error: profileError } =
+          await supabase
+            .from("profiles")
+            .insert({
+              id: userId,
+              full_name: fullName,
+              role: "viewer",
+            });
+
+        if (profileError) {
+          console.error(profileError);
+        }
+      }
+
+      return {};
     };
+
+  /* ---------- Sign out ---------- */
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -156,13 +200,13 @@ export function AuthProvider({
 }
 
 export function useAuth() {
-  const v = useContext(Ctx);
+  const ctx = useContext(Ctx);
 
-  if (!v) {
+  if (!ctx) {
     throw new Error(
       "useAuth must be used inside AuthProvider"
     );
   }
 
-  return v;
+  return ctx;
 }
