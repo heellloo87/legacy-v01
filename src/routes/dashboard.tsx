@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import {
   Plus, TrendingUp, Box, Users, Activity, MoreHorizontal,
@@ -9,9 +10,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — Legacy AR" }] }),
-  component: Dashboard,
+  head: () => ({
+    meta: [
+      {
+        title: "Dashboard — Legacy AR",
+      },
+    ],
+  }),
+
+  component: ProtectedDashboard,
 });
+
+function ProtectedDashboard() {
+  return (
+    <RequireAuth>
+      <Dashboard />
+    </RequireAuth>
+  );
+}
 
 /* ---------- Types ---------- */
 
