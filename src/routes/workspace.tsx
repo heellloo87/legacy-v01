@@ -27,6 +27,7 @@ export const Route = createFileRoute("/workspace")({
 
 type DbProject = {
   id: string;
+  user_id?: string;
   name: string;
   description: string | null;
   category: string;
@@ -37,6 +38,7 @@ type DbProject = {
   cover_url: string | null;
   design_url: string | null;
   design_ext: string | null;
+  creator_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -90,14 +92,26 @@ function useAllProjects() {
   return useQuery({
     queryKey: ["projects", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select(
-          "id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, created_at, updated_at"
-        )
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as DbProject[];
+      // Fetch own projects (all visibilities) + other users' team/public projects
+      // Two queries merged client-side because RLS won't return own private via team query
+      const [ownRes, teamRes] = await Promise.all([
+        supabase
+          .from("projects")
+          .select("id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, creator_name, created_at, updated_at")
+          .eq("user_id", user!.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("projects")
+          .select("id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, creator_name, created_at, updated_at")
+          .in("visibility", ["team", "public"])
+          .neq("user_id", user!.id)
+          .order("created_at", { ascending: false }),
+      ]);
+      if (ownRes.error)  throw ownRes.error;
+      if (teamRes.error) throw teamRes.error;
+      // Own projects first, then team ones
+      const merged = [...(ownRes.data ?? []), ...(teamRes.data ?? [])];
+      return merged as DbProject[];
     },
     enabled: !!user,
   });
@@ -348,6 +362,16 @@ function Workspace() {
             <p className="text-xs text-muted-foreground mt-1">
               {project.description ?? "No description."}
             </p>
+            {project.creator_name && (
+              <div className="mt-2 inline-flex items-center gap-1.5 glass rounded-full px-2.5 py-1 text-[10px]">
+                <Users className="h-2.5 w-2.5 text-accent" />
+                <span className="text-muted-foreground">by</span>
+                <span className="text-foreground font-medium">{project.creator_name}</span>
+                <span className={`ml-1 capitalize ${project.visibility === "private" ? "text-muted-foreground" : "text-accent"}`}>
+                  · {project.visibility}
+                </span>
+              </div>
+            )}
           </div>
 
           <div>
