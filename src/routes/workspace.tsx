@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import type { JSX } from "react";
 import {
   Send, Upload, Heart, MessageSquare, Share2, Eye, History,
   Users, Tag, Calendar, ChevronLeft, ChevronRight, Search,
@@ -26,19 +27,37 @@ export const Route = createFileRoute("/workspace")({
 
 type DbProject = {
   id: string;
-  user_id?: string;
+  user_id: string;
+
   name: string;
+
   description: string | null;
+
   category: string;
-  status: "active" | "review" | "draft" | "in-progress" | "done";
+
+  status:
+    | "active"
+    | "review"
+    | "draft"
+    | "in-progress"
+    | "done";
+
   progress: number;
+
   version: string;
+
   visibility: string;
+
   cover_url: string | null;
+
   design_url: string | null;
+
   design_ext: string | null;
+
   creator_name: string | null;
+
   created_at: string;
+
   updated_at: string;
 };
 
@@ -55,7 +74,7 @@ type PresenceUser = {
 
 const MODEL_EXT = ["glb", "gltf"];
 
-const STATUS_ICON: Record<string, React.ReactNode> = {
+const STATUS_ICON: Record<string, JSX.Element> = {
   active:      <CheckCircle2 className="h-3 w-3 text-accent" />,
   review:      <AlertCircle  className="h-3 w-3 text-yellow-400" />,
   draft:       <Clock        className="h-3 w-3 text-muted-foreground" />,
@@ -90,8 +109,13 @@ function nextVersion(current: string) {
 }
 
 function getPresenceColor(userId: string) {
-  const idx = parseInt(userId.slice(-2), 16) % PRESENCE_COLORS.length;
-  return PRESENCE_COLORS[idx];
+  const seed =
+    [...userId].reduce(
+      (a, c) => a + c.charCodeAt(0),
+      0
+    ) % PRESENCE_COLORS.length;
+
+  return PRESENCE_COLORS[seed];
 }
 
 function getInitials(name: string | null | undefined, fallback: string) {
@@ -103,19 +127,28 @@ function getInitials(name: string | null | undefined, fallback: string) {
 
 function useAllProjects() {
   const { user } = useAuth();
+    if (!user) {
+    return {
+      data: [],
+      isPending: false,
+      isLoading: false,
+      error: null,
+    } as any;
+  }
+
   return useQuery({
     queryKey: ["projects", user?.id],
     queryFn: async () => {
       const [ownRes, teamRes] = await Promise.all([
         supabase
           .from("projects")
-          .select("id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, creator_name, created_at, updated_at")
+          .select("id, user_id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, creator_name, created_at, updated_at")
           .eq("user_id", user!.id)
           .order("created_at", { ascending: false }),
         supabase
           .from("projects")
-          .select("id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, creator_name, created_at, updated_at")
-          .in("visibility", ["team", "public"])
+           .select("id, user_id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, creator_name, created_at, updated_at")
+          .or("visibility.eq.team,visibility.eq.public")
           .neq("user_id", user!.id)
           .order("created_at", { ascending: false }),
       ]);
@@ -177,9 +210,15 @@ function Workspace() {
   const idx     = projects.findIndex((p) => p.id === activeId);
 
   const prev = useCallback(() => {
-    if (!projects.length) return;
-    setActiveId(projects[(idx - 1 + projects.length) % projects.length].id);
-  }, [idx, projects]);
+  if (!projects.length) return;
+
+  const target =
+    projects[(idx - 1 + projects.length) % projects.length];
+
+  if (target) {
+    setActiveId(target.id);
+  }
+}, [idx, projects]);
 
   const next = useCallback(() => {
     if (!projects.length) return;
@@ -198,7 +237,39 @@ function Workspace() {
   const comments      = commentsQuery.data ?? [];
   const [commentText, setCommentText] = useState("");
 
-  const addComment = useAddComment(activeId, activeVersion, user?.id);
+    const addComment = useAddComment(
+    activeId,
+    activeVersion,
+    user?.id
+  );
+
+/* ADD */
+
+useEffect(() => {
+  if (!activeId) return;
+
+  const channel = supabase
+    .channel(`project:${activeId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "projects",
+        filter: `id=eq.${activeId}`,
+      },
+      () => {
+        qc.invalidateQueries({
+          queryKey: ["projects"],
+        });
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [activeId, qc]);
 
   const sendComment = useCallback(() => {
     const text = commentText.trim();
@@ -272,7 +343,7 @@ function Workspace() {
       const { error: dbErr } = await supabase.from("projects").update({ design_url: publicUrl, design_ext: ext, version: newVer }).eq("id", activeId);
       if (dbErr) throw dbErr;
 
-      qc.invalidateQueries({ queryKey: ["projects", user.id] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success(`Design uploaded as ${newVer}`);
       setShowUpload(false); setUploadPreview(null); setUploadFile(null);
     } catch (e: any) {
@@ -507,7 +578,7 @@ function Workspace() {
           </div>
 
           <div className="mt-3 flex-1 overflow-y-auto space-y-3 pr-1">
-            {commentsQuery.isLoading ? (
+            {commentsQuery.isPending ? (
               <div className="grid place-items-center h-20"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>
             ) : comments.length === 0 ? (
               <div className="grid place-items-center h-20 text-center">
@@ -649,8 +720,32 @@ function Workspace() {
 /* ---------- 3D Model ---------- */
 function GLTFModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
-  const cloned    = useMemo(() => scene.clone(true), [scene]);
-  return <Center><primitive object={cloned} /></Center>;
+
+  const cloned = useMemo(() => {
+    return scene.clone(true);
+  }, [scene]);
+
+  useEffect(() => {
+    return () => {
+      cloned.traverse((obj: any) => {
+        if (obj.geometry) obj.geometry.dispose();
+
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m: any) => m.dispose?.());
+          } else {
+            obj.material.dispose?.();
+          }
+        }
+      });
+    };
+  }, [cloned]);
+
+  return (
+    <Center>
+      <primitive object={cloned} />
+    </Center>
+  );
 }
 
 /* ---------- Modal ---------- */
