@@ -221,9 +221,15 @@ function Workspace() {
 }, [idx, projects]);
 
   const next = useCallback(() => {
-    if (!projects.length) return;
-    setActiveId(projects[(idx + 1) % projects.length].id);
-  }, [idx, projects]);
+  if (!projects.length) return;
+
+  const target =
+    projects[(idx + 1) % projects.length];
+
+  if (target) {
+    setActiveId(target.id);
+  }
+}, [idx, projects]);
 
   /* ---- Comment filter: this version vs all ---- */
   const [commentFilter, setCommentFilter] = useState<"version" | "all">("version");
