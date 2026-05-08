@@ -211,6 +211,21 @@ function Workspace() {
     setCommentText("");
   }, [commentText, addComment]);
 
+
+  /* ---- Update project progress / status ---- */
+  const updateProject = useMutation({
+    mutationFn: async (fields: { progress?: number; status?: string }) => {
+      if (!activeId) return;
+      const { error } = await supabase
+        .from("projects")
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq("id", activeId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects", user?.id] }),
+    onError: (e: any) => toast.error(e.message),
+  });
+
   /* ---- Likes ---- */
   const [likedIds,   setLikedIds]   = useState<Set<string>>(new Set());
   const [localLikes, setLocalLikes] = useState<Record<string, number>>({});
@@ -353,10 +368,32 @@ function Workspace() {
 
           <div>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-              <span>Progress</span><span>{project.progress}%</span>
+              <span>Progress</span>
+              <span className="text-accent font-medium">{project.progress}%</span>
             </div>
-            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-              <div className="h-full bg-gradient-primary transition-all duration-700" style={{ width: `${project.progress}%` }} />
+            {/* Drag to update progress */}
+            <input
+              type="range" min={0} max={100} step={5}
+              value={project.progress}
+              onChange={(e) => updateProject.mutate({ progress: Number(e.target.value) })}
+              className="w-full h-1.5 rounded-full accent-primary cursor-pointer bg-white/5"
+              style={{ accentColor: "hsl(var(--accent))" }}
+            />
+            {/* Status quick-select */}
+            <div className="mt-2 flex gap-1">
+              {["in-progress", "review", "done"].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => updateProject.mutate({ status: s })}
+                  className={`flex-1 rounded-lg py-1 text-[9px] capitalize transition ${
+                    project.status === s
+                      ? "bg-gradient-primary text-white"
+                      : "glass text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
           </div>
 
