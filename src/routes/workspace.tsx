@@ -49,6 +49,14 @@ type Comment = {
   user_id: string;
   text: string;
   created_at: string;
+  profiles?: { full_name: string | null } | null;
+};
+
+type PresenceUser = {
+  user_id: string;
+  full_name: string;
+  color: string;
+  online_at: string;
 };
 
 /* ---------- Constants ---------- */
@@ -117,13 +125,35 @@ function useAllProjects() {
   });
 }
 
-function useComments(projectId: string | undefined) {
-  return useQuery({
+const PRESENCE_COLORS = [
+  "from-purple-500 to-purple-700",
+  "from-teal-500 to-teal-700",
+  "from-amber-500 to-amber-700",
+  "from-pink-500 to-pink-700",
+  "from-blue-500 to-blue-700",
+  "from-green-500 to-green-700",
+];
+
+function getPresenceColor(userId: string) {
+  const idx = parseInt(userId.slice(-2), 16) % PRESENCE_COLORS.length;
+  return PRESENCE_COLORS[idx];
+}
+
+function getInitials(name: string | null | undefined, fallback: string) {
+  if (!name) return fallback.slice(0, 2).toUpperCase();
+  return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function useComments(projectId: string | undefined, userId: string | undefined) {
+  const qc = useQueryClient();
+
+  // Initial fetch — join profiles for real names
+  const query = useQuery({
     queryKey: ["comments", projectId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comments")
-        .select("*")
+        .select("*, profiles(full_name)")
         .eq("project_id", projectId!)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -131,6 +161,59 @@ function useComments(projectId: string | undefined) {
     },
     enabled: !!projectId,
   });
+
+  // Realtime subscription — new INSERT → refetch
+  useEffect(() => {
+    if (!projectId) return;
+    const channel = supabase
+      .channel(`comments:${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "comments", filter: `project_id=eq.${projectId}` },
+        () => { qc.invalidateQueries({ queryKey: ["comments", projectId] }); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId, qc]);
+
+  return query;
+}
+
+function usePresence(projectId: string | undefined, user: { id: string; user_metadata?: any } | null) {
+  const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
+
+  useEffect(() => {
+    if (!projectId || !user) return;
+
+    const fullName = user.user_metadata?.full_name ?? "Anonymous";
+    const channel = supabase.channel(`presence:${projectId}`, {
+      config: { presence: { key: user.id } },
+    });
+
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ full_name: string; online_at: string }>();
+        const users: PresenceUser[] = Object.entries(state).map(([uid, presences]) => {
+          const p = (presences as any[])[0];
+          return {
+            user_id: uid,
+            full_name: p?.full_name ?? "Member",
+            color: getPresenceColor(uid),
+            online_at: p?.online_at ?? new Date().toISOString(),
+          };
+        });
+        setOnlineUsers(users);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ full_name: fullName, online_at: new Date().toISOString() });
+        }
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId, user]);
+
+  return onlineUsers;
 }
 
 /* ---------- Page ---------- */
@@ -166,7 +249,8 @@ function Workspace() {
   }, [idx, projects]);
 
   /* ---- Comments ---- */
-  const commentsQuery = useComments(activeId);
+  const commentsQuery = useComments(activeId, user?.id);
+  const onlineUsers   = usePresence(activeId, user);
   const comments      = commentsQuery.data ?? [];
   const [commentText, setCommentText] = useState("");
 
@@ -521,7 +605,28 @@ function Workspace() {
 
         {/* ---- Right: comments ---- */}
         <aside className="lg:col-span-3 glass-strong rounded-3xl p-5 flex flex-col">
-          <h3 className="font-display font-semibold">Activity & Comments</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-semibold">Activity & Comments</h3>
+            {/* Online presence avatars */}
+            {onlineUsers.length > 0 && (
+              <div className="flex items-center gap-1">
+                <div className="flex -space-x-2">
+                  {onlineUsers.slice(0, 4).map((u) => (
+                    <div
+                      key={u.user_id}
+                      title={u.user_id === user?.id ? "You" : u.full_name}
+                      className={`h-7 w-7 rounded-full bg-gradient-to-br ${u.color} grid place-items-center text-[10px] font-semibold border-2 border-background ring-0`}
+                    >
+                      {u.user_id === user?.id ? "Me" : getInitials(u.full_name, u.user_id)}
+                    </div>
+                  ))}
+                </div>
+                <span className="text-[10px] text-accent ml-1">
+                  {onlineUsers.length} online
+                </span>
+              </div>
+            )}
+          </div>
 
           <div className="mt-4 flex-1 overflow-y-auto space-y-3 pr-1">
             {commentsQuery.isPending ? (
@@ -533,26 +638,26 @@ function Workspace() {
                 No comments yet — be first!
               </p>
             ) : (
-              comments.map((c) => (
-                <div key={c.id} className="glass rounded-xl p-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`h-7 w-7 rounded-full bg-gradient-to-br ${
-                        COLORS[parseInt(c.user_id.slice(-1), 16) % COLORS.length]
-                      } grid place-items-center text-[10px] font-semibold`}
-                    >
-                      {c.user_id === user?.id ? "Me" : c.user_id.slice(0, 2).toUpperCase()}
+              comments.map((c) => {
+                const isMe = c.user_id === user?.id;
+                const name = isMe ? "You" : (c.profiles?.full_name ?? "Member");
+                const initials = isMe ? "Me" : getInitials(c.profiles?.full_name, c.user_id);
+                const color = getPresenceColor(c.user_id);
+                return (
+                  <div key={c.id} className={`glass rounded-xl p-3 ${isMe ? "border border-accent/20" : ""}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${color} grid place-items-center text-[10px] font-semibold shrink-0`}>
+                        {initials}
+                      </div>
+                      <div className="text-sm font-medium truncate flex-1">{name}</div>
+                      <div className="text-[10px] text-muted-foreground shrink-0">
+                        {timeAgo(c.created_at)}
+                      </div>
                     </div>
-                    <div className="text-sm font-medium">
-                      {c.user_id === user?.id ? "You" : "Member"}
-                    </div>
-                    <div className="ml-auto text-[10px] text-muted-foreground">
-                      {timeAgo(c.created_at)}
-                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{c.text}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">{c.text}</p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
