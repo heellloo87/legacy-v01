@@ -87,6 +87,33 @@ export type Database = {
         }
         Relationships: []
       }
+      collaboration_sessions: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          session_status: string
+          joined_at: string
+          last_seen: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          session_status?: string
+          joined_at?: string
+          last_seen?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          session_status?: string
+          joined_at?: string
+          last_seen?: string
+        }
+        Relationships: []
+      }
       comments: {
         Row: {
           id: string
