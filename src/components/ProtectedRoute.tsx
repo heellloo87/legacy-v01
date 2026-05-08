@@ -1,4 +1,5 @@
-import { Navigate } from "react-router-dom";
+import { Navigate } from "@tanstack/react-router";
+
 import { useAuth } from "@/lib/auth";
 
 type Props = {
@@ -10,14 +11,26 @@ export default function ProtectedRoute({
   children,
   roles,
 }: Props) {
-  const { role, loading } = useAuth();
+  const {
+    role,
+    loading,
+  } = useAuth();
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="p-6">
+        Loading...
+      </div>
+    );
   }
 
-  if (!role || !roles.includes(role)) {
-    return <Navigate to="/" />;
+  if (
+    !role ||
+    !roles.includes(role)
+  ) {
+    return (
+      <Navigate to="/" />
+    );
   }
 
   return <>{children}</>;
