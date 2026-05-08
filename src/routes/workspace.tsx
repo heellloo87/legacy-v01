@@ -3,211 +3,62 @@ import { AppShell } from "@/components/AppShell";
 import {
   Send, Upload, Heart, MessageSquare, Share2, Eye, History,
   Users, Tag, Calendar, ChevronLeft, ChevronRight, Search,
-  X, Clock, CheckCircle2, AlertCircle, Plus, ImageIcon, Loader2,
+  X, Clock, CheckCircle2, AlertCircle, Plus, ImageIcon, Loader2, Box,
 } from "lucide-react";
-import headsetImg  from "@/assets/model-headset.jpg";
-import watchImg    from "@/assets/model-watch.jpg";
-import droneImg    from "@/assets/model-drone.jpg";
-import speakerImg  from "@/assets/model-speaker.jpg";
-import gloveImg    from "@/assets/model-glove.jpg";
-import cameraImg   from "@/assets/model-camera.jpg";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense, useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Stage, useGLTF, Center } from "@react-three/drei";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { toast } from "sonner";
+
+/* ---------- Route — reads ?id search param ---------- */
 
 export const Route = createFileRoute("/workspace")({
   head: () => ({ meta: [{ title: "Workspace — Legacy AR" }] }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    id: typeof search.id === "string" ? search.id : undefined,
+  }),
   component: Workspace,
 });
 
 /* ---------- Types ---------- */
 
-type Comment = {
-  who: string;
-  text: string;
-  time: string;
-  color: string;
-};
-
-type Project = {
+type DbProject = {
   id: string;
   name: string;
-  desc: string;
-  cat: string;
-  image: string;           // URL or data-URL (for uploads)
-  members: string[];
-  memberCount: number;
+  description: string | null;
+  category: string;
+  status: "active" | "review" | "draft";
   progress: number;
   version: string;
-  updated: string;
-  visibility: "Team" | "Private" | "Public";
-  versions: number;
-  comments: number;        // persisted count (from server)
-  renders: number;
-  arViews: number;
-  likes: number;
-  status: "active" | "review" | "draft";
-  comments_list: Comment[];
-  activity: string[];
+  visibility: string;
+  cover_url: string | null;
+  design_url: string | null;
+  design_ext: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-/* ---------- Seed data (simulates API response) ---------- */
+type Comment = {
+  id: string;
+  project_id: string;
+  user_id: string;
+  text: string;
+  created_at: string;
+};
 
-const SEED_PROJECTS: Project[] = [
-  {
-    id: "helios",
-    name: "Helios Headset v3",
-    desc: "Next-gen AR headset prototype with adaptive lenses and spatial audio.",
-    cat: "Hardware",
-    image: headsetImg,
-    members: ["A", "M", "L", "S", "K"],
-    memberCount: 5,
-    progress: 78,
-    version: "v14",
-    updated: "Today, 18:42",
-    visibility: "Team",
-    versions: 14,
-    comments: 38,
-    renders: 212,
-    arViews: 89,
-    likes: 24,
-    status: "active",
-    comments_list: [
-      { who: "Maya", text: "Love the new bezel curve — feels more premium.", time: "2m", color: "from-primary to-secondary" },
-      { who: "Leo",  text: "Can we push the cyan glow 10% brighter on the inner rim?", time: "12m", color: "from-secondary to-accent" },
-      { who: "Sara", text: "Approved for AR preview ✨", time: "1h", color: "from-accent to-primary" },
-    ],
-    activity: ["Leo uploaded v14", "Render queue completed", "Maya joined the workspace"],
-  },
-  {
-    id: "watch",
-    name: "Neon Smartwatch",
-    desc: "Ultra-thin wearable with holographic display and biometric sensors.",
-    cat: "Wearable",
-    image: watchImg,
-    members: ["R", "T", "J"],
-    memberCount: 3,
-    progress: 42,
-    version: "v6",
-    updated: "Yesterday, 14:20",
-    visibility: "Private",
-    versions: 6,
-    comments: 17,
-    renders: 94,
-    arViews: 31,
-    likes: 11,
-    status: "active",
-    comments_list: [
-      { who: "Rita",  text: "The strap hinge needs rework — too bulky at 3mm.", time: "1h",  color: "from-primary to-secondary" },
-      { who: "James", text: "Holographic layer render looks stunning!", time: "4h",  color: "from-secondary to-accent" },
-    ],
-    activity: ["James pushed v6", "Rita left 3 annotations", "Auto-render started"],
-  },
-  {
-    id: "drone",
-    name: "Aether Drone",
-    desc: "Autonomous delivery drone with foldable arms and LiDAR obstacle detection.",
-    cat: "Robotics",
-    image: droneImg,
-    members: ["B", "N", "C", "P", "V", "W", "Q"],
-    memberCount: 7,
-    progress: 91,
-    version: "v22",
-    updated: "2 days ago",
-    visibility: "Team",
-    versions: 22,
-    comments: 61,
-    renders: 540,
-    arViews: 210,
-    likes: 47,
-    status: "review",
-    comments_list: [
-      { who: "Nina",  text: "Final propeller geometry approved by aerodynamics team.", time: "30m", color: "from-primary to-secondary" },
-      { who: "Cole",  text: "Battery compartment latch still needs tolerance check.", time: "2h",  color: "from-secondary to-accent" },
-      { who: "Pablo", text: "Sending to manufacturing review board tomorrow.", time: "5h",  color: "from-accent to-primary" },
-    ],
-    activity: ["Pablo requested final review", "Cole uploaded v22", "Stress test passed"],
-  },
-  {
-    id: "speaker",
-    name: "Quantum Speaker",
-    desc: "360° spatial audio device with reactive LED mesh and voice AI built in.",
-    cat: "Audio",
-    image: speakerImg,
-    members: ["D", "F", "G", "H"],
-    memberCount: 4,
-    progress: 25,
-    version: "v3",
-    updated: "3 days ago",
-    visibility: "Team",
-    versions: 3,
-    comments: 9,
-    renders: 28,
-    arViews: 12,
-    likes: 5,
-    status: "draft",
-    comments_list: [
-      { who: "Dana", text: "LED diffuser pattern needs more variance — too uniform.", time: "1d", color: "from-primary to-secondary" },
-    ],
-    activity: ["Dana started workspace", "Initial renders complete", "Project created"],
-  },
-  {
-    id: "glove",
-    name: "Pulse VR Glove",
-    desc: "Haptic feedback glove with 24-point pressure sensing and wireless streaming.",
-    cat: "Wearable",
-    image: gloveImg,
-    members: ["E", "I", "U", "O", "Y", "Z"],
-    memberCount: 6,
-    progress: 60,
-    version: "v9",
-    updated: "4 days ago",
-    visibility: "Team",
-    versions: 9,
-    comments: 29,
-    renders: 130,
-    arViews: 55,
-    likes: 18,
-    status: "active",
-    comments_list: [
-      { who: "Eli",  text: "Thumb actuator response time dropped to 8ms — great improvement.", time: "2d", color: "from-primary to-secondary" },
-      { who: "Uma",  text: "Need to revisit palm plate ergonomics for smaller hands.", time: "3d", color: "from-secondary to-accent" },
-    ],
-    activity: ["Eli merged haptic update", "Firmware v2.1 linked", "Uma added annotations"],
-  },
-  {
-    id: "camera",
-    name: "Orbit Camera",
-    desc: "Modular 8K camera body with magnetic lens system and AI autofocus.",
-    cat: "Optics",
-    image: cameraImg,
-    members: ["X", "Y"],
-    memberCount: 2,
-    progress: 15,
-    version: "v2",
-    updated: "1 week ago",
-    visibility: "Private",
-    versions: 2,
-    comments: 4,
-    renders: 11,
-    arViews: 3,
-    likes: 2,
-    status: "draft",
-    comments_list: [
-      { who: "Xena", text: "Lens mount diameter confirmed at 54mm.", time: "1w", color: "from-primary to-secondary" },
-    ],
-    activity: ["Xena created project", "Initial sketch uploaded"],
-  },
+/* ---------- Constants ---------- */
+
+const MODEL_EXT = ["glb", "gltf"];
+
+const COLORS = [
+  "from-primary to-secondary",
+  "from-secondary to-accent",
+  "from-accent to-primary",
+  "from-primary to-accent",
 ];
-
-/* ---------- Simulated fetch (swap with real API call) ---------- */
-// Replace this function body with:
-//   const res = await fetch("/api/projects");
-//   return res.json();
-async function fetchProjects(): Promise<Project[]> {
-  await new Promise((r) => setTimeout(r, 600)); // simulate network
-  return SEED_PROJECTS;
-}
-
-/* ---------- Helpers ---------- */
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   active: <CheckCircle2 className="h-3 w-3 text-accent" />,
@@ -215,216 +66,204 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
   draft:  <Clock        className="h-3 w-3 text-muted-foreground" />,
 };
 
-const CATEGORIES = ["Hardware", "Wearable", "Robotics", "Audio", "Optics", "Software", "Other"];
-const COLORS     = [
-  "from-primary to-secondary",
-  "from-secondary to-accent",
-  "from-accent to-primary",
-  "from-primary to-accent",
-];
+/* ---------- Helpers ---------- */
 
-function nowLabel() {
-  return new Date().toLocaleString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
-function nextVersion(current: string): string {
+function nextVersion(current: string) {
   const n = parseInt(current.replace("v", ""), 10);
   return `v${isNaN(n) ? 1 : n + 1}`;
 }
 
-/* ---------- New-Project Form ---------- */
+/* ---------- Data hooks ---------- */
 
-type NewProjectForm = {
-  name: string;
-  desc: string;
-  cat: string;
-  visibility: "Team" | "Private" | "Public";
-  status: "active" | "review" | "draft";
-};
+function useAllProjects() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["projects", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select(
+          "id, name, description, category, status, progress, version, visibility, cover_url, design_url, design_ext, created_at, updated_at"
+        )
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as DbProject[];
+    },
+    enabled: !!user,
+  });
+}
 
-const BLANK_FORM: NewProjectForm = {
-  name: "",
-  desc: "",
-  cat: "Hardware",
-  visibility: "Team",
-  status: "draft",
-};
+function useComments(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ["comments", projectId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("comments")
+        .select("*")
+        .eq("project_id", projectId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as Comment[];
+    },
+    enabled: !!projectId,
+  });
+}
 
 /* ---------- Page ---------- */
 
 function Workspace() {
-  // ---- data state ----
-  const [projects, setProjects]     = useState<Project[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [activeId, setActiveId]     = useState<string>("");
+  const { id: routeId } = Route.useSearch();
+  const { user }        = useAuth();
+  const qc              = useQueryClient();
 
-  // ---- UI state ----
-  const [showPicker,    setShowPicker]    = useState(false);
-  const [showAddModal,  setShowAddModal]  = useState(false);
-  const [showUpload,    setShowUpload]    = useState(false);
-  const [search,        setSearch]        = useState("");
-  const [comment,       setComment]       = useState("");
+  const allProjects = useAllProjects();
+  const projects    = allProjects.data ?? [];
 
-  // ---- per-project local state ----
-  const [localComments, setLocalComments] = useState<Record<string, Comment[]>>({});
-  const [likedIds,      setLikedIds]      = useState<Set<string>>(new Set());
-  const [localLikes,    setLocalLikes]    = useState<Record<string, number>>({});
-
-  // ---- new project form ----
-  const [form, setForm] = useState<NewProjectForm>(BLANK_FORM);
-
-  // ---- upload state ----
-  const [uploadPreview,  setUploadPreview]  = useState<string | null>(null);
-  const [uploadFileName, setUploadFileName] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  /* ---- Fetch on mount ---- */
+  /* Active project — prefer route param, else first */
+  const [activeId, setActiveId] = useState<string | undefined>(routeId);
   useEffect(() => {
-    fetchProjects().then((data) => {
-      setProjects(data);
-      if (data.length > 0) setActiveId(data[0].id);
-      setLoading(false);
-    });
-  }, []);
+    if (!activeId && projects.length > 0) setActiveId(projects[0].id);
+  }, [projects, activeId]);
+  useEffect(() => {
+    if (routeId) setActiveId(routeId);
+  }, [routeId]);
 
-  /* ---- Derived ---- */
   const project = projects.find((p) => p.id === activeId);
   const idx     = projects.findIndex((p) => p.id === activeId);
 
-  const prev = useCallback(() =>
-    setActiveId(projects[(idx - 1 + projects.length) % projects.length].id),
-    [idx, projects]);
+  const prev = useCallback(() => {
+    if (!projects.length) return;
+    setActiveId(projects[(idx - 1 + projects.length) % projects.length].id);
+  }, [idx, projects]);
 
-  const next = useCallback(() =>
-    setActiveId(projects[(idx + 1) % projects.length].id),
-    [idx, projects]);
+  const next = useCallback(() => {
+    if (!projects.length) return;
+    setActiveId(projects[(idx + 1) % projects.length].id);
+  }, [idx, projects]);
 
-  const filtered = projects.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.cat.toLowerCase().includes(search.toLowerCase())
-  );
+  /* ---- Comments ---- */
+  const commentsQuery = useComments(activeId);
+  const comments      = commentsQuery.data ?? [];
+  const [commentText, setCommentText] = useState("");
 
-  const allComments = project
-    ? [...(project.comments_list ?? []), ...(localComments[activeId] ?? [])]
-    : [];
-
-  // Live comment count = persisted count + local additions
-  const liveCommentCount = project
-    ? project.comments + (localComments[activeId]?.length ?? 0)
-    : 0;
-
-  // Live likes = base + toggle delta
-  const liveLikes = project
-    ? project.likes + (localLikes[activeId] ?? 0)
-    : 0;
-
-  const isLiked = likedIds.has(activeId);
-
-  /* ---- Actions ---- */
+  const addComment = useMutation({
+    mutationFn: async (text: string) => {
+      if (!user || !activeId) throw new Error("Not ready");
+      const { error } = await supabase
+        .from("comments")
+        .insert({ project_id: activeId, user_id: user.id, text });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comments", activeId] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const sendComment = useCallback(() => {
-    const text = comment.trim();
-    if (!text || !activeId) return;
-    const newComment: Comment = {
-      who: "You",
-      text,
-      time: "just now",
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-    };
-    setLocalComments((prev) => ({
-      ...prev,
-      [activeId]: [...(prev[activeId] ?? []), newComment],
-    }));
-    // Also append to activity
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.id === activeId
-          ? { ...p, activity: [`You commented: "${text.slice(0, 30)}…"`, ...p.activity] }
-          : p
-      )
-    );
-    setComment("");
-  }, [comment, activeId]);
+    const text = commentText.trim();
+    if (!text) return;
+    addComment.mutate(text);
+    setCommentText("");
+  }, [commentText, addComment]);
+
+  /* ---- Likes (local, wire to DB if needed) ---- */
+  const [likedIds,   setLikedIds]   = useState<Set<string>>(new Set());
+  const [localLikes, setLocalLikes] = useState<Record<string, number>>({});
+  const isLiked   = activeId ? likedIds.has(activeId) : false;
+  const liveLikes = (localLikes[activeId ?? ""] ?? 0);
 
   const toggleLike = useCallback(() => {
     if (!activeId) return;
     setLikedIds((prev) => {
-      const next = new Set(prev);
+      const next  = new Set(prev);
       const delta = prev.has(activeId) ? -1 : 1;
-      if (prev.has(activeId)) next.delete(activeId); else next.add(activeId);
+      prev.has(activeId) ? next.delete(activeId) : next.add(activeId);
       setLocalLikes((lk) => ({ ...lk, [activeId]: (lk[activeId] ?? 0) + delta }));
       return next;
     });
   }, [activeId]);
 
-  /* ---- Add new project ---- */
-  const handleAddProject = useCallback(() => {
-    if (!form.name.trim()) return;
-    const id = `proj-${Date.now()}`;
-    const newProject: Project = {
-      id,
-      name: form.name.trim(),
-      desc: form.desc.trim() || "No description provided.",
-      cat: form.cat,
-      image: headsetImg, // placeholder until a design is uploaded
-      members: ["Y"],
-      memberCount: 1,
-      progress: 0,
-      version: "v1",
-      updated: `Today, ${nowLabel()}`,
-      visibility: form.visibility,
-      versions: 1,
-      comments: 0,
-      renders: 0,
-      arViews: 0,
-      likes: 0,
-      status: form.status,
-      comments_list: [],
-      activity: ["Project created", "You joined the workspace"],
-    };
-    // TODO: POST /api/projects with newProject, then setProjects from response
-    setProjects((prev) => [newProject, ...prev]);
-    setActiveId(id);
-    setForm(BLANK_FORM);
-    setShowAddModal(false);
-  }, [form]);
-
   /* ---- Upload design ---- */
+  const [showUpload,    setShowUpload]    = useState(false);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploadFile,    setUploadFile]    = useState<File | null>(null);
+  const [uploading,     setUploading]     = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadFileName(file.name);
+    setUploadFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setUploadPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
   };
 
-  const confirmUpload = useCallback(() => {
-    if (!uploadPreview || !activeId) return;
-    const newVer = nextVersion(project?.version ?? "v0");
-    // TODO: POST /api/projects/:id/designs with the file, update version from response
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.id === activeId
-          ? {
-              ...p,
-              image:    uploadPreview,
-              version:  newVer,
-              versions: p.versions + 1,
-              updated:  `Today, ${nowLabel()}`,
-              activity: [`You uploaded ${newVer}`, ...p.activity],
-            }
-          : p
-      )
-    );
-    setUploadPreview(null);
-    setUploadFileName("");
-    setShowUpload(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [uploadPreview, activeId, project]);
+  const confirmUpload = useCallback(async () => {
+    if (!uploadFile || !activeId || !user || !project) return;
+    setUploading(true);
+    try {
+      const newVer = nextVersion(project.version);
+      const ext    = uploadFile.name.split(".").pop()?.toLowerCase() ?? "png";
+      const path   = `designs/${user.id}/${activeId}/${Date.now()}-${uploadFile.name}`;
 
-  /* ---- Loading state ---- */
-  if (loading) {
+      const { error: storErr } = await supabase.storage
+        .from("project-assets")
+        .upload(path, uploadFile, { upsert: true });
+      if (storErr) throw storErr;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("project-assets")
+        .getPublicUrl(path);
+
+      const { error: dbErr } = await supabase
+        .from("projects")
+        .update({ design_url: publicUrl, design_ext: ext, version: newVer })
+        .eq("id", activeId);
+      if (dbErr) throw dbErr;
+
+      qc.invalidateQueries({ queryKey: ["projects", user.id] });
+      toast.success(`Design uploaded as ${newVer}`);
+      setShowUpload(false);
+      setUploadPreview(null);
+      setUploadFile(null);
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [uploadFile, activeId, user, project, qc]);
+
+  const closeUpload = () => {
+    if (uploading) return;
+    setShowUpload(false);
+    setUploadPreview(null);
+    setUploadFile(null);
+  };
+
+  /* ---- Picker / search ---- */
+  const [showPicker, setShowPicker] = useState(false);
+  const [search,     setSearch]     = useState("");
+  const filtered = projects.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.category.toLowerCase().includes(search.toLowerCase())
+  );
+
+  /* ---- Loading / empty states ---- */
+  if (allProjects.isPending) {
     return (
       <AppShell title="Workspace">
         <div className="flex h-[60vh] items-center justify-center gap-3 text-muted-foreground">
@@ -435,24 +274,21 @@ function Workspace() {
     );
   }
 
-  /* ---- Empty state ---- */
   if (!project) {
     return (
       <AppShell title="Workspace">
         <div className="flex h-[60vh] flex-col items-center justify-center gap-4 text-muted-foreground">
-          <p className="text-sm">No projects yet.</p>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-primary text-white text-sm inline-flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" /> New Project
-          </button>
+          <p className="text-sm">No project found.</p>
         </div>
       </AppShell>
     );
   }
 
-  /* ---- Main UI ---- */
+  const isModel3D = !!(project.design_ext && MODEL_EXT.includes(project.design_ext));
+  const hasDesign = !!project.design_url;
+  const hasCover  = !!project.cover_url;
+
+  /* ---- Render ---- */
   return (
     <AppShell title={project.name}>
       <div className="grid lg:grid-cols-12 gap-6 h-[calc(100vh-9rem)]">
@@ -460,7 +296,6 @@ function Workspace() {
         {/* ---- Left: project info ---- */}
         <aside className="lg:col-span-3 glass-strong rounded-3xl p-5 overflow-y-auto flex flex-col gap-4">
 
-          {/* Header: nav + All + New */}
           <div className="flex items-center justify-between">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Project</div>
             <div className="flex items-center gap-1">
@@ -476,37 +311,45 @@ function Workspace() {
               >
                 All
               </button>
-              <button
-                onClick={() => setShowAddModal(true)}
-                title="New project"
-                className="glass rounded-lg p-1 hover:bg-white/10 transition ml-1"
-              >
-                <Plus className="h-3.5 w-3.5 text-accent" />
-              </button>
             </div>
           </div>
 
-          {/* Thumbnail */}
+          {/* Cover thumbnail */}
           <div className="h-32 rounded-2xl relative overflow-hidden">
-            <img
-              src={project.image}
-              alt={project.name}
-              loading="lazy"
-              className="absolute inset-0 h-full w-full object-cover transition-all duration-500"
-            />
+            {hasCover ? (
+              <img
+                src={project.cover_url!}
+                alt={project.name}
+                className="absolute inset-0 h-full w-full object-cover transition-all duration-500"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-accent/20 grid place-items-center">
+                {isModel3D ? (
+                  <Box className="h-10 w-10 text-white/20" />
+                ) : (
+                  <ImageIcon className="h-10 w-10 text-white/20" />
+                )}
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-card/90 via-transparent to-transparent" />
             <div className="absolute bottom-2 left-2 flex items-center gap-1 glass rounded-md px-2 py-1 text-[10px]">
               {STATUS_ICON[project.status]}
               <span className="capitalize">{project.status}</span>
             </div>
+            {isModel3D && (
+              <div className="absolute top-2 right-2 glass rounded-md px-2 py-0.5 text-[10px] text-accent inline-flex items-center gap-1">
+                <Box className="h-2.5 w-2.5" /> 3D
+              </div>
+            )}
           </div>
 
           <div>
             <h3 className="font-display font-semibold text-lg leading-tight">{project.name}</h3>
-            <p className="text-xs text-muted-foreground mt-1">{project.desc}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {project.description ?? "No description."}
+            </p>
           </div>
 
-          {/* Progress */}
           <div>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
               <span>Progress</span><span>{project.progress}%</span>
@@ -520,50 +363,32 @@ function Workspace() {
           </div>
 
           <div className="space-y-3 text-sm">
-            <Meta icon={Tag}      label="Category"  value={project.cat} />
-            <Meta icon={Users}    label="Team"       value={`${project.memberCount} collaborators`} />
-            <Meta icon={Calendar} label="Updated"    value={project.updated} />
-            <Meta icon={Eye}      label="Visibility" value={project.visibility} />
+            <Meta icon={Tag}      label="Category"   value={project.category} />
+            <Meta icon={Eye}      label="Visibility"  value={project.visibility} />
+            <Meta icon={Calendar} label="Version"     value={project.version} />
           </div>
 
-          {/* Members */}
-          <div>
-            <div className="text-xs text-muted-foreground mb-2">Members</div>
-            <div className="flex -space-x-2">
-              {project.members.slice(0, 5).map((m) => (
-                <div
-                  key={m}
-                  className="h-8 w-8 rounded-full bg-gradient-primary border-2 border-background grid place-items-center text-[11px] font-semibold"
-                >
-                  {m}
-                </div>
-              ))}
-              {project.memberCount > 5 && (
-                <div className="h-8 w-8 rounded-full bg-white/10 border-2 border-background grid place-items-center text-[10px]">
-                  +{project.memberCount - 5}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Stats */}
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <Stat label="Versions" value={String(project.versions)} />
-            <Stat label="Comments" value={String(liveCommentCount)} />
-            <Stat label="Renders"  value={String(project.renders)} />
-            <Stat label="AR views" value={String(project.arViews)} />
+            <Stat label="Comments" value={String(comments.length)} />
+            <Stat label="Progress" value={`${project.progress}%`} />
           </div>
         </aside>
 
-        {/* ---- Center: design preview ---- */}
+        {/* ---- Center: design viewer ---- */}
         <section className="lg:col-span-6 glass-strong rounded-3xl p-5 flex flex-col">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="glass rounded-lg px-3 py-1.5 text-xs">{project.version} · current</span>
-              <button className="glass rounded-lg p-1.5"><History className="h-4 w-4" /></button>
+              <span className="glass rounded-lg px-3 py-1.5 text-xs">
+                {project.version} · current
+              </span>
+              <button className="glass rounded-lg p-1.5">
+                <History className="h-4 w-4" />
+              </button>
             </div>
             <div className="flex items-center gap-2">
-              <button className="glass rounded-lg p-2 hover:bg-white/10"><Share2 className="h-4 w-4" /></button>
+              <button className="glass rounded-lg p-2 hover:bg-white/10">
+                <Share2 className="h-4 w-4" />
+              </button>
               <button
                 onClick={() => setShowUpload(true)}
                 className="px-3 py-2 rounded-lg bg-gradient-primary text-white text-xs inline-flex items-center gap-2 shadow-[0_0_20px_-8px_oklch(0.65_0.24_295/70%)]"
@@ -573,39 +398,82 @@ function Workspace() {
             </div>
           </div>
 
-          <div className="flex-1 mt-4 rounded-2xl relative overflow-hidden grid place-items-center">
-            <img
-              key={project.id + project.version}
-              src={project.image}
-              alt={project.name}
-              loading="lazy"
-              className="absolute inset-0 h-full w-full object-cover transition-all duration-500"
-            />
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-accent/20" />
-            <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-primary/30 blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-accent/20 blur-3xl pointer-events-none" />
+          {/* Viewer area */}
+          <div className="flex-1 mt-4 rounded-2xl relative overflow-hidden grid place-items-center bg-gradient-to-br from-primary/10 to-accent/10">
+            {isModel3D && hasDesign ? (
+              /* Interactive 3D viewer */
+              <Canvas
+                key={project.design_url}
+                camera={{ position: [0, 0, 3.5], fov: 50 }}
+                dpr={[1, 2]}
+                className="absolute inset-0 h-full w-full"
+              >
+                <Suspense fallback={null}>
+                  <Stage environment="city" intensity={0.5} adjustCamera={1}>
+                    <GLTFModel url={project.design_url!} />
+                  </Stage>
+                </Suspense>
+                <OrbitControls enablePan={false} autoRotate autoRotateSpeed={0.8} />
+              </Canvas>
+            ) : hasDesign ? (
+              /* Image design */
+              <img
+                key={project.design_url}
+                src={project.design_url!}
+                alt={project.name}
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover transition-all duration-500"
+              />
+            ) : hasCover ? (
+              /* Cover as fallback */
+              <img
+                key={project.cover_url}
+                src={project.cover_url!}
+                alt={project.name}
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover opacity-50 transition-all duration-500"
+              />
+            ) : (
+              /* Empty placeholder */
+              <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                <Box className="h-14 w-14 opacity-20" />
+                <p className="text-xs">No design uploaded yet</p>
+                <button
+                  onClick={() => setShowUpload(true)}
+                  className="px-4 py-2 rounded-xl glass text-xs hover:bg-white/10 transition"
+                >
+                  Upload first design
+                </button>
+              </div>
+            )}
+
+            {!isModel3D && (
+              <>
+                <div className="absolute -top-20 -left-20 h-72 w-72 rounded-full bg-primary/30 blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-accent/20 blur-3xl pointer-events-none" />
+              </>
+            )}
 
             <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-xs">
-              <span className="glass rounded-lg px-3 py-1.5">1920 × 1080</span>
+              <span className="glass rounded-lg px-3 py-1.5">
+                {isModel3D ? "3D · drag to rotate" : "Image viewer"}
+              </span>
               <div className="flex items-center gap-2">
-                {/* Like button — toggles */}
                 <button
                   onClick={toggleLike}
-                  className={`glass rounded-lg px-3 py-1.5 inline-flex items-center gap-1 transition-colors ${
-                    isLiked ? "text-pink-400" : ""
-                  }`}
+                  className={`glass rounded-lg px-3 py-1.5 inline-flex items-center gap-1 transition-colors ${isLiked ? "text-pink-400" : ""}`}
                 >
                   <Heart className={`h-3 w-3 ${isLiked ? "fill-pink-400" : ""}`} />
                   {liveLikes}
                 </button>
                 <button className="glass rounded-lg px-3 py-1.5 inline-flex items-center gap-1">
-                  <MessageSquare className="h-3 w-3" /> {liveCommentCount}
+                  <MessageSquare className="h-3 w-3" /> {comments.length}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Project strip */}
+          {/* Project thumbnail strip */}
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             {projects.map((p) => (
               <button
@@ -615,16 +483,15 @@ function Workspace() {
                   p.id === activeId ? "border-accent" : "border-transparent opacity-50 hover:opacity-80"
                 }`}
               >
-                <img src={p.image} alt={p.name} className="absolute inset-0 h-full w-full object-cover" />
+                {p.cover_url ? (
+                  <img src={p.cover_url} alt={p.name} className="absolute inset-0 h-full w-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-accent/20 grid place-items-center">
+                    <Box className="h-4 w-4 text-white/20" />
+                  </div>
+                )}
               </button>
             ))}
-            {/* Add project shortcut in strip */}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="shrink-0 h-12 w-16 rounded-xl border-2 border-dashed border-white/20 hover:border-accent/60 transition-all grid place-items-center"
-            >
-              <Plus className="h-4 w-4 text-muted-foreground" />
-            </button>
           </div>
         </section>
 
@@ -633,40 +500,54 @@ function Workspace() {
           <h3 className="font-display font-semibold">Activity & Comments</h3>
 
           <div className="mt-4 flex-1 overflow-y-auto space-y-3 pr-1">
-            {allComments.map((c, i) => (
-              <div key={i} className="glass rounded-xl p-3">
-                <div className="flex items-center gap-2">
-                  <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${c.color} grid place-items-center text-[10px] font-semibold`}>
-                    {c.who[0]}
+            {commentsQuery.isPending ? (
+              <div className="grid place-items-center h-20">
+                <Loader2 className="h-4 w-4 animate-spin text-accent" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                No comments yet — be first!
+              </p>
+            ) : (
+              comments.map((c) => (
+                <div key={c.id} className="glass rounded-xl p-3">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`h-7 w-7 rounded-full bg-gradient-to-br ${
+                        COLORS[parseInt(c.user_id.slice(-1), 16) % COLORS.length]
+                      } grid place-items-center text-[10px] font-semibold`}
+                    >
+                      {c.user_id === user?.id ? "Me" : c.user_id.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="text-sm font-medium">
+                      {c.user_id === user?.id ? "You" : "Member"}
+                    </div>
+                    <div className="ml-auto text-[10px] text-muted-foreground">
+                      {timeAgo(c.created_at)}
+                    </div>
                   </div>
-                  <div className="text-sm font-medium">{c.who}</div>
-                  <div className="ml-auto text-[10px] text-muted-foreground">{c.time}</div>
+                  <p className="text-xs text-muted-foreground mt-2">{c.text}</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">{c.text}</p>
-              </div>
-            ))}
-
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-2">Activity</div>
-            {project.activity.map((a, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" /> {a}
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           <div className="mt-4 glass rounded-xl p-2 flex items-center gap-2">
             <input
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendComment()}
               placeholder="Write a comment…"
               className="bg-transparent outline-none flex-1 text-sm px-2"
             />
             <button
               onClick={sendComment}
-              className="h-8 w-8 rounded-lg bg-gradient-primary grid place-items-center"
+              disabled={addComment.isPending}
+              className="h-8 w-8 rounded-lg bg-gradient-primary grid place-items-center disabled:opacity-60"
             >
-              <Send className="h-3.5 w-3.5" />
+              {addComment.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Send className="h-3.5 w-3.5" />}
             </button>
           </div>
         </aside>
@@ -677,17 +558,12 @@ function Workspace() {
         <Modal onClose={() => { setShowPicker(false); setSearch(""); }}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-semibold text-lg">All Projects</h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setShowPicker(false); setShowAddModal(true); }}
-                className="glass rounded-lg px-3 py-1.5 text-xs inline-flex items-center gap-1 hover:bg-white/10 transition"
-              >
-                <Plus className="h-3.5 w-3.5 text-accent" /> New
-              </button>
-              <button onClick={() => { setShowPicker(false); setSearch(""); }} className="glass rounded-lg p-2 hover:bg-white/10">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => { setShowPicker(false); setSearch(""); }}
+              className="glass rounded-lg p-2 hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="flex items-center gap-2 glass rounded-xl px-3 py-2 mb-4">
@@ -710,12 +586,22 @@ function Workspace() {
                   p.id === activeId ? "border border-accent" : ""
                 }`}
               >
-                <div className="h-14 w-14 rounded-xl overflow-hidden shrink-0 relative">
-                  <img src={p.image} alt={p.name} className="absolute inset-0 h-full w-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                <div className="h-14 w-14 rounded-xl overflow-hidden shrink-0 relative bg-gradient-to-br from-primary/20 to-accent/10">
+                  {p.cover_url ? (
+                    <img
+                      src={p.cover_url}
+                      alt={p.name}
+                      className="absolute inset-0 h-full w-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center">
+                      <Box className="h-5 w-5 text-white/20" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{p.name}</div>
-                  <div className="text-[11px] text-muted-foreground">{p.cat}</div>
+                  <div className="text-[11px] text-muted-foreground">{p.category}</div>
                   <div className="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden w-full">
                     <div className="h-full bg-gradient-primary" style={{ width: `${p.progress}%` }} />
                   </div>
@@ -730,144 +616,46 @@ function Workspace() {
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="col-span-2 text-center text-sm text-muted-foreground py-8">No projects match "{search}"</p>
+              <p className="col-span-2 text-center text-sm text-muted-foreground py-8">
+                No projects match "{search}"
+              </p>
             )}
-          </div>
-        </Modal>
-      )}
-
-      {/* ======== Add New Project Modal ======== */}
-      {showAddModal && (
-        <Modal onClose={() => { setShowAddModal(false); setForm(BLANK_FORM); }}>
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-display font-semibold text-lg">New Project</h2>
-            <button onClick={() => { setShowAddModal(false); setForm(BLANK_FORM); }} className="glass rounded-lg p-2 hover:bg-white/10">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {/* Name */}
-            <div>
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Project name *</label>
-              <input
-                autoFocus
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Phantom Headset v1"
-                className="mt-1 w-full glass rounded-xl px-3 py-2 text-sm bg-transparent outline-none border border-white/10 focus:border-accent/50 transition"
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Description</label>
-              <textarea
-                value={form.desc}
-                onChange={(e) => setForm((f) => ({ ...f, desc: e.target.value }))}
-                placeholder="What is this project about?"
-                rows={3}
-                className="mt-1 w-full glass rounded-xl px-3 py-2 text-sm bg-transparent outline-none resize-none border border-white/10 focus:border-accent/50 transition"
-              />
-            </div>
-
-            {/* Category + Visibility */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Category</label>
-                <select
-                  value={form.cat}
-                  onChange={(e) => setForm((f) => ({ ...f, cat: e.target.value }))}
-                  className="mt-1 w-full glass rounded-xl px-3 py-2 text-sm bg-background/80 outline-none border border-white/10 focus:border-accent/50 transition"
-                >
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Visibility</label>
-                <select
-                  value={form.visibility}
-                  onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value as Project["visibility"] }))}
-                  className="mt-1 w-full glass rounded-xl px-3 py-2 text-sm bg-background/80 outline-none border border-white/10 focus:border-accent/50 transition"
-                >
-                  <option value="Team">Team</option>
-                  <option value="Private">Private</option>
-                  <option value="Public">Public</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Initial status</label>
-              <div className="mt-1 flex gap-2">
-                {(["draft", "active", "review"] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setForm((f) => ({ ...f, status: s }))}
-                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs transition border ${
-                      form.status === s
-                        ? "border-accent bg-accent/10 text-accent"
-                        : "glass border-transparent text-muted-foreground hover:bg-white/5"
-                    }`}
-                  >
-                    {STATUS_ICON[s]}
-                    <span className="capitalize">{s}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => { setShowAddModal(false); setForm(BLANK_FORM); }}
-                className="flex-1 glass rounded-xl py-2 text-sm hover:bg-white/10 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddProject}
-                disabled={!form.name.trim()}
-                className="flex-1 rounded-xl py-2 text-sm bg-gradient-primary text-white disabled:opacity-40 transition"
-              >
-                Create project
-              </button>
-            </div>
           </div>
         </Modal>
       )}
 
       {/* ======== Upload Design Modal ======== */}
       {showUpload && (
-        <Modal onClose={() => { setShowUpload(false); setUploadPreview(null); setUploadFileName(""); }}>
+        <Modal onClose={closeUpload}>
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="font-display font-semibold text-lg">Upload New Design</h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Will be saved as <span className="text-accent">{nextVersion(project.version)}</span> for {project.name}
+                Will be saved as{" "}
+                <span className="text-accent">{nextVersion(project.version)}</span>
+                {" "}for {project.name}
               </p>
             </div>
-            <button
-              onClick={() => { setShowUpload(false); setUploadPreview(null); setUploadFileName(""); }}
-              className="glass rounded-lg p-2 hover:bg-white/10"
-            >
+            <button onClick={closeUpload} className="glass rounded-lg p-2 hover:bg-white/10">
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Drop zone / preview */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="relative h-48 rounded-2xl border-2 border-dashed border-white/20 hover:border-accent/50 transition cursor-pointer overflow-hidden grid place-items-center"
+            className="relative h-52 rounded-2xl border-2 border-dashed border-white/20 hover:border-accent/50 transition cursor-pointer overflow-hidden grid place-items-center"
           >
             {uploadPreview ? (
-              <img src={uploadPreview} alt="preview" className="absolute inset-0 h-full w-full object-cover" />
+              <img
+                src={uploadPreview}
+                alt="preview"
+                className="absolute inset-0 h-full w-full object-contain bg-black/20"
+              />
             ) : (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <ImageIcon className="h-8 w-8" />
-                <p className="text-sm">Click to select image</p>
-                <p className="text-[10px]">PNG, JPG, WebP, SVG</p>
+                <p className="text-sm">Click to select image or 3D model</p>
+                <p className="text-[10px]">.glb / .gltf → 3D viewer &nbsp;·&nbsp; .png / .jpg → image</p>
               </div>
             )}
             {uploadPreview && (
@@ -880,30 +668,40 @@ function Workspace() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept=".glb,.gltf,.png,.jpg,.jpeg,.webp"
             className="hidden"
             onChange={handleFileChange}
           />
 
-          {uploadFileName && (
+          {uploadFile && (
             <p className="mt-2 text-[11px] text-muted-foreground truncate">
-              Selected: <span className="text-foreground">{uploadFileName}</span>
+              Selected:{" "}
+              <span className="text-foreground">{uploadFile.name}</span>
+              {" "}· {(uploadFile.size / 1024).toFixed(1)} KB
+              {MODEL_EXT.includes(uploadFile.name.split(".").pop()?.toLowerCase() ?? "") && (
+                <span className="ml-2 text-accent">3D model</span>
+              )}
             </p>
           )}
 
           <div className="flex gap-2 mt-4">
             <button
-              onClick={() => { setShowUpload(false); setUploadPreview(null); setUploadFileName(""); }}
-              className="flex-1 glass rounded-xl py-2 text-sm hover:bg-white/10 transition"
+              onClick={closeUpload}
+              disabled={uploading}
+              className="flex-1 glass rounded-xl py-2 text-sm hover:bg-white/10 transition disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               onClick={confirmUpload}
-              disabled={!uploadPreview}
+              disabled={!uploadFile || uploading}
               className="flex-1 rounded-xl py-2 text-sm bg-gradient-primary text-white disabled:opacity-40 transition inline-flex items-center justify-center gap-2"
             >
-              <Upload className="h-3.5 w-3.5" /> Publish {nextVersion(project.version)}
+              {uploading ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+              ) : (
+                <><Upload className="h-3.5 w-3.5" /> Publish {nextVersion(project.version)}</>
+              )}
             </button>
           </div>
         </Modal>
@@ -912,7 +710,15 @@ function Workspace() {
   );
 }
 
-/* ---------- Modal wrapper ---------- */
+/* ---------- 3D Model ---------- */
+
+function GLTFModel({ url }: { url: string }) {
+  const { scene } = useGLTF(url);
+  const cloned    = useMemo(() => scene.clone(true), [scene]);
+  return <Center><primitive object={cloned} /></Center>;
+}
+
+/* ---------- Modal ---------- */
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
@@ -930,7 +736,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
   );
 }
 
-/* ---------- Helper components ---------- */
+/* ---------- Helpers ---------- */
 
 function Meta({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
