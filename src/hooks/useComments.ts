@@ -29,24 +29,39 @@ export function useComments(
     queryKey: ["comments", projectId, version],
     queryFn: async () => {
       let q = supabase
-        .from("comments")
-        .select("*, profiles(full_name)")
-        .eq("project_id", projectId!)
-        .order("created_at", { ascending: true });
+  .from("comments")
+  .select(`
+    id,
+    project_id,
+    user_id,
+    text,
+    version,
+    created_at,
+    profiles (
+      full_name
+    )
+  `)
+  .eq("project_id", projectId!)
+  .order("created_at", { ascending: true });
 
-      // Filter by version unless "all" is requested
-      if (version !== "all") {
-        q = q.eq("version", version);
-      }
+// Filter by version unless "all" is requested
+if (version !== "all") {
+  q = q.eq("version", version);
+}
 
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as Comment[];
-    },
-    enabled: !!projectId,
-    // Keep showing old comments while switching versions instead of flashing empty
-    placeholderData: (prev: Comment[] | undefined) => prev,
-  });
+const { data, error } = await q;
+
+if (error) {
+  throw error;
+}
+
+return (data ?? []) as Comment[];
+},
+enabled: !!projectId,
+
+// Keep showing old comments while switching versions instead of flashing empty
+placeholderData: (prev: Comment[] | undefined) => prev,
+});
 
   // Realtime — new comment on this project → refetch
   useEffect(() => {
@@ -116,9 +131,11 @@ export function useCommentCountsByVersion(projectId: string | undefined) {
 
       // Count per version
       const counts: Record<string, number> = {};
-      (data ?? []).forEach((c) => {
-        counts[c.version] = (counts[c.version] ?? 0) + 1;
-      });
+
+(data ?? []).forEach((c) => {
+  const key = c.version ?? "unknown";
+  counts[key] = (counts[key] ?? 0) + 1;
+});
       return counts;
     },
     enabled: !!projectId,
