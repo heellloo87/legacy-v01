@@ -1,5 +1,7 @@
+import { RequireAuth } from "@/components/RequireAuth";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+
 import {
   Upload, Save, Box, ChevronDown, Image as ImageIcon, X, Loader2, Camera,
 } from "lucide-react";
@@ -11,9 +13,29 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/projects/new")({
-  head: () => ({ meta: [{ title: "Create Project — Legacy AR" }] }),
-  component: NewProject,
+  head: () => ({
+    meta: [
+      {
+        title: "Create Project — Legacy AR",
+      },
+    ],
+  }),
+
+  component: ProtectedNewProject,
 });
+
+function ProtectedNewProject() {
+  return (
+    <RequireAuth
+      roles={[
+        "admin",
+        "designer",
+      ]}
+    >
+      <NewProject />
+    </RequireAuth>
+  );
+}
 
 const ACCEPTED_DESIGN = ".glb,.gltf,.obj,.png,.jpg,.jpeg,.webp";
 const ACCEPTED_COVER  = ".png,.jpg,.jpeg,.webp";
