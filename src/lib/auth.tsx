@@ -16,8 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 type UserRole =
   | "admin"
   | "designer"
-  | "engineer"
-  | "viewer";
+  | "collaborator"
+  | "manufacturing_expert";
 
 type AuthCtx = {
   session: Session | null;
@@ -105,11 +105,11 @@ export function AuthProvider({
       if (error) {
         console.error(error);
 
-        setRole("viewer");
+        setRole("collaborator");
       } else {
         setRole(
           (data?.role as UserRole) ??
-            "viewer"
+            "collaborator"
         );
       }
 
@@ -171,7 +171,7 @@ export function AuthProvider({
             .upsert({
               id: userId,
               full_name: fullName,
-              role: "viewer",
+              role: "collaborator",
             });
 
         if (profileError) {
