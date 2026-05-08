@@ -1,22 +1,68 @@
-import { useEffect, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/lib/auth";
-import { Loader2 } from "lucide-react";
+import {
+  type ReactNode,
+} from "react";
 
-export function RequireAuth({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
-  const nav = useNavigate();
+import {
+  Navigate,
+} from "@tanstack/react-router";
 
-  useEffect(() => {
-    if (!loading && !session) nav({ to: "/login" });
-  }, [loading, session, nav]);
+import {
+  Loader2,
+} from "lucide-react";
 
-  if (loading || !session) {
+import {
+  useAuth,
+} from "@/lib/auth";
+
+type Props = {
+  children: ReactNode;
+
+  roles?: Array<
+    | "admin"
+    | "designer"
+    | "collaborator"
+    | "manufacturing_expert"
+  >;
+};
+
+export function RequireAuth({
+  children,
+  roles,
+}: Props) {
+  const {
+    session,
+    loading,
+    role,
+  } = useAuth();
+
+  // Loading
+  if (loading) {
     return (
       <div className="min-h-screen grid place-items-center">
         <Loader2 className="h-6 w-6 animate-spin text-accent" />
       </div>
     );
   }
+
+  // Not logged in
+  if (!session) {
+    return (
+      <Navigate to="/login" />
+    );
+  }
+
+  // Role restricted
+  if (
+    roles &&
+    (
+      !role ||
+      !roles.includes(role)
+    )
+  ) {
+    return (
+      <Navigate to="/dashboard" />
+    );
+  }
+
   return <>{children}</>;
 }
