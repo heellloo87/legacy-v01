@@ -1,16 +1,19 @@
 -- ============================================================
---  Migration: realtime_presence
---  - Enable realtime on comments (was missing, only projects had it)
---  - Allow authenticated users to read all profiles (for comment names)
---  - Create collaboration_sessions table for presence metadata
+--  Migration: realtime_presence (fixed)
 -- ============================================================
 
--- 1. Enable realtime on comments table
-ALTER PUBLICATION supabase_realtime ADD TABLE comments;
+-- 1. Enable realtime on comments (skip if already a member)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'comments'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE comments;
+  END IF;
+END $$;
 
--- 2. Profiles: anyone authenticated can read (needed for comment author names)
---    Policy "anyone can read profiles" already exists from initial migration.
---    This is a no-op if already present.
+-- 2. Profiles: allow authenticated users to read all profiles
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -23,27 +26,36 @@ BEGIN
   END IF;
 END $$;
 
--- 3. Collaboration sessions table (tracks who is viewing what project)
+-- 3. Collaboration sessions table
 CREATE TABLE IF NOT EXISTS collaboration_sessions (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id   uuid REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
-  user_id      uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  session_status text DEFAULT 'active',  -- 'active' | 'idle' | 'offline'
-  joined_at    timestamptz DEFAULT now(),
-  last_seen    timestamptz DEFAULT now(),
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id     uuid REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
+  user_id        uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  session_status text DEFAULT 'active',
+  joined_at      timestamptz DEFAULT now(),
+  last_seen      timestamptz DEFAULT now(),
   UNIQUE(project_id, user_id)
 );
 
--- RLS on collaboration_sessions
 ALTER TABLE collaboration_sessions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "users manage own session"
-  ON collaboration_sessions FOR ALL
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'collaboration_sessions' AND policyname = 'users manage own session') THEN
+    CREATE POLICY "users manage own session" ON collaboration_sessions FOR ALL USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'collaboration_sessions' AND policyname = 'team can read sessions') THEN
+    CREATE POLICY "team can read sessions" ON collaboration_sessions FOR SELECT USING (auth.uid() IS NOT NULL);
+  END IF;
+END $$;
 
-CREATE POLICY "team can read sessions"
-  ON collaboration_sessions FOR SELECT
-  USING (auth.uid() IS NOT NULL);
-
--- Enable realtime for live presence fallback
-ALTER PUBLICATION supabase_realtime ADD TABLE collaboration_sessions;
+-- 4. Enable realtime on collaboration_sessions (skip if already member)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'collaboration_sessions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE collaboration_sessions;
+  END IF;
+END $$;
