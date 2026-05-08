@@ -1,86 +1,89 @@
--- Projects table
-create table if not exists projects (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade not null,
-  name text not null,
-  description text,
-  category text default 'Hardware',
-  visibility text default 'team',
-  progress int default 0,
-  status text default 'draft',
-  image_url text,
-  version text default 'v1',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+-- ============================================================
+--  Migration: fix_schema
+--  - Fix projects table columns (image_url → cover_url + design_url + design_ext)
+--  - Add creator_name to projects (denormalised for fast reads)
+--  - Update RLS: team projects visible to all authenticated users on dashboard
+--                private projects only visible to owner
+--                workspace shows owner's private + all team projects
+--  - Storage bucket: project-assets (public reads, authenticated writes)
+-- ============================================================
 
--- Comments table
-create table if not exists comments (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid references projects(id) on delete cascade not null,
-  user_id uuid references auth.users(id) on delete cascade not null,
-  text text not null,
-  created_at timestamptz default now()
-);
+-- 1. Fix projects table columns --------------------------------
+ALTER TABLE projects
+  RENAME COLUMN image_url TO cover_url;
 
--- Profiles table
-create table if not exists profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  avatar_url text,
-  created_at timestamptz default now()
-);
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS design_url  text,
+  ADD COLUMN IF NOT EXISTS design_ext  text,
+  ADD COLUMN IF NOT EXISTS creator_name text;
 
--- Auto-create profile on signup
-create or replace function handle_new_user()
-returns trigger as $$
-begin
-  insert into public.profiles (id, full_name)
-  values (new.id, new.raw_user_meta_data->>'full_name');
-  return new;
-end;
-$$ language plpgsql security definer;
+-- 2. Back-fill creator_name from profiles ----------------------
+UPDATE projects p
+SET creator_name = pr.full_name
+FROM profiles pr
+WHERE pr.id = p.user_id;
 
-create or replace trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function handle_new_user();
+-- 3. Keep creator_name in sync on new inserts via trigger ------
+CREATE OR REPLACE FUNCTION set_project_creator_name()
+RETURNS TRIGGER AS $$
+BEGIN
+  SELECT full_name INTO NEW.creator_name
+  FROM public.profiles
+  WHERE id = NEW.user_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Auto-update updated_at
-create or replace function update_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
+DROP TRIGGER IF EXISTS projects_set_creator_name ON projects;
+CREATE TRIGGER projects_set_creator_name
+  BEFORE INSERT ON projects
+  FOR EACH ROW EXECUTE FUNCTION set_project_creator_name();
 
-create trigger projects_updated_at
-  before update on projects
-  for each row execute function update_updated_at();
+-- 4. Drop old RLS policies on projects ------------------------
+DROP POLICY IF EXISTS "owner full access" ON projects;
 
--- Row Level Security
-alter table projects enable row level security;
-alter table comments enable row level security;
-alter table profiles enable row level security;
+-- 5. New RLS policies -----------------------------------------
 
--- Projects policies
-create policy "owner full access" on projects
-  for all using (auth.uid() = user_id);
+-- Owner can do anything with their own projects
+CREATE POLICY "owner full access"
+  ON projects FOR ALL
+  USING (auth.uid() = user_id);
 
--- Comments policies
-create policy "anyone can read comments" on comments
-  for select using (true);
+-- Any logged-in user can READ team (and public) projects
+CREATE POLICY "team projects readable by authenticated"
+  ON projects FOR SELECT
+  USING (
+    auth.uid() IS NOT NULL
+    AND visibility IN ('team', 'public')
+  );
 
-create policy "authenticated users can comment" on comments
-  for insert with check (auth.uid() = user_id);
+-- 6. Storage bucket: project-assets ---------------------------
+-- Run via Supabase dashboard or supabase CLI if not already created.
+-- The INSERT below is idempotent thanks to ON CONFLICT DO NOTHING.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('project-assets', 'project-assets', true)
+ON CONFLICT (id) DO NOTHING;
 
--- Profiles policies
-create policy "own profile" on profiles
-  for all using (auth.uid() = id);
+-- Allow any authenticated user to upload into project-assets
+DROP POLICY IF EXISTS "authenticated upload" ON storage.objects;
+CREATE POLICY "authenticated upload"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'project-assets');
 
-create policy "anyone can read profiles" on profiles
-  for select using (true);
+-- Allow the owning user to update / delete their own files
+DROP POLICY IF EXISTS "owner manage files" ON storage.objects;
+CREATE POLICY "owner manage files"
+  ON storage.objects FOR ALL
+  TO authenticated
+  USING (
+    bucket_id = 'project-assets'
+    AND (storage.foldername(name))[1] IN ('covers', 'designs')
+    AND auth.uid()::text = (storage.foldername(name))[2]
+  );
 
--- Enable realtime
-alter publication supabase_realtime add table projects;
-alter publication supabase_realtime add table comments;
+-- Public read (bucket is already public=true but belt-and-suspenders)
+DROP POLICY IF EXISTS "public read project-assets" ON storage.objects;
+CREATE POLICY "public read project-assets"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'project-assets');
