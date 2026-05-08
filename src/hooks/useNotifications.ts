@@ -12,7 +12,6 @@ export type Notification = {
   created_at: string;
 };
 
-/** Fetch all notifications for the current user, newest first. */
 export function useNotifications(userId: string | undefined) {
   const qc = useQueryClient();
 
@@ -31,19 +30,13 @@ export function useNotifications(userId: string | undefined) {
     enabled: !!userId,
   });
 
-  // Realtime: push new notifications instantly
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
       .channel(`notifications:${userId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         () => qc.invalidateQueries({ queryKey: ["notifications", userId] })
       )
       .subscribe();
@@ -53,32 +46,23 @@ export function useNotifications(userId: string | undefined) {
   return query;
 }
 
-/** Mark a single notification as read. */
 export function useMarkRead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true })
-        .eq("id", id);
+      const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }
 
-/** Mark all notifications as read for the current user. */
 export function useMarkAllRead(userId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       if (!userId) return;
-      const { error } = await supabase
-        .from("notifications")
-        .update({ read: true })
-        .eq("user_id", userId)
-        .eq("read", false);
+      const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", userId] }),
