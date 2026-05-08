@@ -30,7 +30,7 @@ type DbProject = {
   name: string;
   description: string | null;
   category: string;
-  status: "active" | "review" | "draft";
+  status: "active" | "review" | "draft" | "in-progress" | "done";
   progress: number;
   version: string;
   visibility: string;
@@ -56,9 +56,11 @@ type PresenceUser = {
 const MODEL_EXT = ["glb", "gltf"];
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
-  active: <CheckCircle2 className="h-3 w-3 text-accent" />,
-  review: <AlertCircle  className="h-3 w-3 text-yellow-400" />,
-  draft:  <Clock        className="h-3 w-3 text-muted-foreground" />,
+  active:      <CheckCircle2 className="h-3 w-3 text-accent" />,
+  review:      <AlertCircle  className="h-3 w-3 text-yellow-400" />,
+  draft:       <Clock        className="h-3 w-3 text-muted-foreground" />,
+  "in-progress": <Clock      className="h-3 w-3 text-blue-400" />,
+  done:        <CheckCircle2 className="h-3 w-3 text-emerald-400" />,
 };
 
 const PRESENCE_COLORS = [
@@ -125,8 +127,6 @@ function useAllProjects() {
   });
 }
 
-// useComments is imported from @/hooks/useComments
-
 function usePresence(projectId: string | undefined, user: { id: string; user_metadata?: any } | null) {
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
 
@@ -188,10 +188,9 @@ function Workspace() {
 
   /* ---- Comment filter: this version vs all ---- */
   const [commentFilter, setCommentFilter] = useState<"version" | "all">("version");
-  const activeVersion    = project?.version ?? "v1";
-  const versionForQuery  = commentFilter === "all" ? "all" : activeVersion;
+  const activeVersion   = project?.version ?? "v1";
+  const versionForQuery = commentFilter === "all" ? "all" : activeVersion;
 
-  // Reset filter when switching projects
   useEffect(() => { setCommentFilter("version"); }, [activeId]);
 
   const commentsQuery = useComments(activeId, versionForQuery);
@@ -199,7 +198,6 @@ function Workspace() {
   const comments      = commentsQuery.data ?? [];
   const [commentText, setCommentText] = useState("");
 
-  // useAddComment scopes the insert to activeId + activeVersion
   const addComment = useAddComment(activeId, activeVersion, user?.id);
 
   const sendComment = useCallback(() => {
@@ -210,7 +208,6 @@ function Workspace() {
     });
     setCommentText("");
   }, [commentText, addComment]);
-
 
   /* ---- Update project progress / status ---- */
   const updateProject = useMutation({
@@ -376,12 +373,12 @@ function Workspace() {
               type="range" min={0} max={100} step={5}
               value={project.progress}
               onChange={(e) => updateProject.mutate({ progress: Number(e.target.value) })}
-              className="w-full h-1.5 rounded-full accent-primary cursor-pointer bg-white/5"
+              className="w-full h-1.5 rounded-full cursor-pointer bg-white/5"
               style={{ accentColor: "hsl(var(--accent))" }}
             />
             {/* Status quick-select */}
             <div className="mt-2 flex gap-1">
-              {["in-progress", "review", "done"].map((s) => (
+              {(["in-progress", "review", "done"] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => updateProject.mutate({ status: s })}
@@ -493,7 +490,6 @@ function Workspace() {
                   ))}
                 </div>
               )}
-              {/* Current version badge */}
               <span className="glass rounded-full px-2.5 py-1 text-[10px] text-accent">{activeVersion}</span>
             </div>
           </div>
@@ -505,7 +501,7 @@ function Workspace() {
                 className={`flex-1 py-1.5 rounded-lg text-[10px] transition ${
                   commentFilter === tab ? "bg-gradient-primary text-white" : "text-muted-foreground hover:text-foreground"
                 }`}>
-                {tab === "version" ? `This version` : "All versions"}
+                {tab === "version" ? "This version" : "All versions"}
               </button>
             ))}
           </div>
@@ -530,7 +526,6 @@ function Workspace() {
                     <div className="flex items-center gap-2">
                       <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${color} grid place-items-center text-[10px] font-semibold shrink-0`}>{initials}</div>
                       <div className="text-sm font-medium truncate flex-1">{name}</div>
-                      {/* Show version tag when viewing all versions */}
                       {commentFilter === "all" && c.version && c.version !== activeVersion && (
                         <span className="text-[9px] glass rounded-full px-1.5 py-0.5 text-muted-foreground shrink-0">{c.version}</span>
                       )}
