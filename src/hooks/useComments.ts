@@ -1,4 +1,4 @@
-// Drop this file into src/hooks/useComments.ts
+
 // Handles comments scoped to a specific project + version
 
 import { useEffect } from "react";
