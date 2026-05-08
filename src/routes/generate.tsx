@@ -36,7 +36,7 @@ export const Route = createFileRoute("/generate")({
 
 function ProtectedGenerate() {
   return (
-    <RequireAuth roles={["admin", "designer", "engineer"]}>
+    <RequireAuth roles={["admin", "designer", "manufacturing_expert"]}>
       <Generate />
     </RequireAuth>
   );
@@ -145,7 +145,7 @@ function Generate() {
   const canGenerate =
     role === "admin" ||
     role === "designer" ||
-    role === "engineer";
+    role === "manufacturing_expert";
 
   const toggleGoal = (id: string) => {
     if (!editing) return;
