@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { useComments, useAddComment } from "@/hooks/useComments";
 
 export const Route = createFileRoute("/workspace")({
   head: () => ({ meta: [{ title: "Workspace — Legacy AR" }] }),
@@ -41,15 +42,7 @@ type DbProject = {
   updated_at: string;
 };
 
-type Comment = {
-  id: string;
-  project_id: string;
-  user_id: string;
-  text: string;
-  version: string;
-  created_at: string;
-  profiles?: { full_name: string | null } | null;
-};
+// Comment type is imported from @/hooks/useComments
 
 type PresenceUser = {
   user_id: string;
@@ -132,43 +125,7 @@ function useAllProjects() {
   });
 }
 
-/* Version-scoped comments — pass "all" to see everything */
-function useComments(projectId: string | undefined, version: string) {
-  const qc = useQueryClient();
-
-  const query = useQuery({
-    queryKey: ["comments", projectId, version],
-    queryFn: async () => {
-      let q = supabase
-        .from("comments")
-        .select("*, profiles(full_name)")
-        .eq("project_id", projectId!)
-        .order("created_at", { ascending: true });
-
-      if (version !== "all") q = q.eq("version", version);
-
-      const { data, error } = await q;
-      if (error) throw error;
-      return data as Comment[];
-    },
-    enabled: !!projectId,
-  });
-
-  useEffect(() => {
-    if (!projectId) return;
-    const channel = supabase
-      .channel(`comments:${projectId}:${version}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "comments", filter: `project_id=eq.${projectId}` },
-        () => qc.invalidateQueries({ queryKey: ["comments", projectId] })
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [projectId, version, qc]);
-
-  return query;
-}
+// useComments is imported from @/hooks/useComments
 
 function usePresence(projectId: string | undefined, user: { id: string; user_metadata?: any } | null) {
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
@@ -242,22 +199,15 @@ function Workspace() {
   const comments      = commentsQuery.data ?? [];
   const [commentText, setCommentText] = useState("");
 
-  const addComment = useMutation({
-    mutationFn: async (text: string) => {
-      if (!user || !activeId) throw new Error("Not ready");
-      const { error } = await supabase
-        .from("comments")
-        .insert({ project_id: activeId, user_id: user.id, text, version: activeVersion });
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["comments", activeId] }),
-    onError: (e: any) => toast.error(e.message),
-  });
+  // useAddComment scopes the insert to activeId + activeVersion
+  const addComment = useAddComment(activeId, activeVersion, user?.id);
 
   const sendComment = useCallback(() => {
     const text = commentText.trim();
     if (!text) return;
-    addComment.mutate(text);
+    addComment.mutate(text, {
+      onError: (e: any) => toast.error(e.message),
+    });
     setCommentText("");
   }, [commentText, addComment]);
 
