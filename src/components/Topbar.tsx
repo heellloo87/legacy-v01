@@ -3,7 +3,7 @@ import { useSidebar } from "./sidebar-context";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth";
-import { useNotifications, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications";
+import { useNotifications, useMarkRead, useMarkAllRead } from "@/hooks/useNotifications.ts";
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
