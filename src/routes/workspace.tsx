@@ -474,7 +474,7 @@ function Workspace() {
           </div>
 
           <div className="mt-3 flex-1 overflow-y-auto space-y-3 pr-1">
-            {commentsQuery.isPending ? (
+            {commentsQuery.isLoading ? (
               <div className="grid place-items-center h-20"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>
             ) : comments.length === 0 ? (
               <div className="grid place-items-center h-20 text-center">
