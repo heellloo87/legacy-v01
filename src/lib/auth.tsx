@@ -72,6 +72,11 @@ export function AuthProvider({
       .getSession()
       .then(({ data }) => {
         setSession(data.session);
+      })
+      .finally(() => {
+        if (!session?.user) {
+          setLoading(false);
+        }
       });
 
     return () => {
@@ -99,6 +104,7 @@ export function AuthProvider({
 
       if (error) {
         console.error(error);
+
         setRole("viewer");
       } else {
         setRole(
@@ -162,7 +168,7 @@ export function AuthProvider({
         const { error: profileError } =
           await supabase
             .from("profiles")
-            .insert({
+            .upsert({
               id: userId,
               full_name: fullName,
               role: "viewer",
@@ -180,6 +186,9 @@ export function AuthProvider({
 
   const signOut = async () => {
     await supabase.auth.signOut();
+
+    setRole(null);
+    setSession(null);
   };
 
   return (
