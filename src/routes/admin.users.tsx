@@ -1,10 +1,18 @@
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 import { supabase } from "@/integrations/supabase/client";
 
-export default function AdminUsers() {
+export const Route = createFileRoute("/admin/users")({
+  head: () => ({
+    meta: [{ title: "User Management — Legacy AR" }],
+  }),
+  component: AdminUsers,
+});
+
+function AdminUsers() {
   const [users, setUsers] =
     useState<any[]>([]);
 
