@@ -15,7 +15,6 @@ import {
   X,
   Wand2,
   Shield,
-  UserCog,
 } from "lucide-react";
 
 import { Logo } from "./Logo";
@@ -63,12 +62,6 @@ const adminItems = [
     title: "Admin Dashboard",
     url: "/admin",
     icon: Shield,
-  },
-
-  {
-    title: "User Management",
-    url: "/admin/users",
-    icon: UserCog,
   },
 ];
 
