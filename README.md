@@ -70,18 +70,55 @@
 ---
 
 ## ✦ Tech Stack
+## ✦ Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | React 19 + TanStack Start 1.167 |
-| Routing | TanStack Router (file-based) |
-| Backend / DB | Supabase (Postgres + Realtime + Storage) |
-| Auth | Supabase Auth with RLS |
-| 3D Rendering | Three.js r184 + React Three Fiber 9 + Drei 10 |
-| Styling | Tailwind CSS v4 + shadcn/ui (Radix) |
-| Data Fetching | TanStack Query v5 |
-| Deployment | Cloudflare Workers via Vite |
-| Language | TypeScript 5.8 |
+**Frontend**
+| | |
+|---|---|
+| React 19 | Latest concurrent rendering |
+| TanStack Start 1.167 | Full-stack React meta-framework |
+| TanStack Router | Type-safe file-based routing with code splitting |
+| TanStack Query v5 | Server state, caching, realtime invalidation |
+| TypeScript 5.8 | Strict end-to-end type safety |
+
+**UI & Styling**
+| | |
+|---|---|
+| Tailwind CSS v4 | Utility-first, zero-runtime CSS |
+| shadcn/ui | Headless Radix UI components, fully customizable |
+| Lucide React | Consistent icon system |
+| Sonner | Toast notifications |
+| Custom glass morphism | Design system with CSS variables |
+
+**3D & Visualization**
+| | |
+|---|---|
+| Three.js r184 | WebGL 3D engine |
+| React Three Fiber 9 | Declarative Three.js for React |
+| @react-three/drei 10 | OrbitControls, Stage, GLTF loader, Environment |
+
+**Backend & Database**
+| | |
+|---|---|
+| Supabase Postgres | Managed relational DB with REST API |
+| Row Level Security | Policy-based data access per role |
+| Supabase Realtime | Live comments, notifications, presence via WebSockets |
+| Supabase Storage | CDN-backed file storage for covers and 3D assets |
+| Postgres Triggers | Auto notifications on comment and project events |
+
+**Auth**
+| | |
+|---|---|
+| Supabase Auth | Email/password with JWT sessions |
+| Custom role system | admin, designer, collaborator, manufacturing_expert |
+| Route guards | Client + server enforcement per route |
+
+**Infrastructure**
+| | |
+|---|---|
+| Cloudflare Workers | Edge-deployed, globally distributed |
+| Vite 7 | Lightning fast dev server and build |
+| @cloudflare/vite-plugin | Workers-native Vite integration |
 
 ---
 
