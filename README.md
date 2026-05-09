@@ -19,6 +19,8 @@
 
 **[🚀 Live Demo →](https://legacy-v01.heellloo87.workers.dev/)**
 
+[![Legacy AR Platform](https://legacy-v01.heellloo87.workers.dev/og-image.png)](https://legacy-v01.heellloo87.workers.dev/)
+
 </div>
 
 ---
