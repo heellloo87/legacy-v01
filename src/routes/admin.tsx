@@ -154,19 +154,18 @@ function AdminPage() {
 
   /* Delete user mutation */
   const deleteUser = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", userId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-profiles"] });
-      toast.success("User removed");
-    },
-    onError: (e: any) => toast.error(e.message ?? "Failed to delete user"),
-  });
+  mutationFn: async (userId: string) => {
+    const { error } = await supabase.functions.invoke("delete-user", {
+      body: { userId },
+    });
+    if (error) throw error;
+  },
+  onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["admin-profiles"] });
+    toast.success("User deleted");
+  },
+  onError: (e: any) => toast.error(e.message ?? "Failed to delete user"),
+});
 
   const allProfiles = profiles.data ?? [];
   const filtered = allProfiles.filter((p) => {
