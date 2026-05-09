@@ -29,41 +29,34 @@ export function useComments(
     queryKey: ["comments", projectId, version],
     queryFn: async () => {
       let q = supabase
-  .from("comments")
-  .select(`
-    id,
-    project_id,
-    user_id,
-    text,
-    version,
-    created_at,
-    profiles (
-      full_name
-    )
-  `)
-  .eq("project_id", projectId!)
-  .order("created_at", { ascending: true });
+        .from("comments")
+        .select(`
+          id,
+          project_id,
+          user_id,
+          text,
+          version,
+          created_at
+        `)
+        .eq("project_id", projectId!)
+        .order("created_at", { ascending: true });
 
-// Filter by version unless "all" is requested
-if (version !== "all") {
-  q = q.eq("version", version);
-}
+      if (version !== "all") {
+        q = q.eq("version", version);
+      }
 
-const { data, error } = await q;
+      const { data, error } = await q;
 
-if (error) {
-  throw error;
-}
+      if (error) {
+        throw error;
+      }
 
-return (data ?? []) as Comment[];
-},
-enabled: !!projectId,
+      return (data ?? []) as Comment[];
+    },
+    enabled: !!projectId,
+    placeholderData: (prev: Comment[] | undefined) => prev,
+  });
 
-// Keep showing old comments while switching versions instead of flashing empty
-placeholderData: (prev: Comment[] | undefined) => prev,
-});
-
-  // Realtime — new comment on this project → refetch
   useEffect(() => {
     if (!projectId) return;
     const channel = supabase
@@ -109,7 +102,6 @@ export function useAddComment(
       if (error) throw error;
     },
     onSuccess: () => {
-      // Invalidate both version-specific and "all" queries
       qc.invalidateQueries({ queryKey: ["comments", projectId] });
     },
   });
@@ -117,7 +109,6 @@ export function useAddComment(
 
 /**
  * Get comment counts grouped by version for a project.
- * Useful for showing badges on version history.
  */
 export function useCommentCountsByVersion(projectId: string | undefined) {
   return useQuery({
@@ -129,13 +120,12 @@ export function useCommentCountsByVersion(projectId: string | undefined) {
         .eq("project_id", projectId!);
       if (error) throw error;
 
-      // Count per version
       const counts: Record<string, number> = {};
+      (data ?? []).forEach((c) => {
+        const key = c.version ?? "unknown";
+        counts[key] = (counts[key] ?? 0) + 1;
+      });
 
-(data ?? []).forEach((c) => {
-  const key = c.version ?? "unknown";
-  counts[key] = (counts[key] ?? 0) + 1;
-});
       return counts;
     },
     enabled: !!projectId,
