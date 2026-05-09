@@ -32,9 +32,9 @@ const ViewerRoute = ViewerRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ViewerProjectIdRoute = ViewerProjectIdRouteImport.update({
-  id: '/$projectId',
-  path: '/$projectId',
-  getParentRoute: () => ViewerRoute,
+  id: '/viewer/$projectId',
+  path: '/viewer/$projectId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -166,6 +166,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   ViewerRoute: typeof ViewerRoute
+  ViewerProjectIdRoute: typeof ViewerProjectIdRoute
   WorkspaceRoute: typeof WorkspaceRoute
   ProjectsNewRoute: typeof ProjectsNewRoute
   AdminRoute: typeof AdminRoute
@@ -189,10 +190,10 @@ declare module '@tanstack/react-router' {
     }
     '/viewer/$projectId': {
       id: '/viewer/$projectId'
-      path: '/$projectId'
+      path: '/viewer/$projectId'
       fullPath: '/viewer/$projectId'
       preLoaderRoute: typeof ViewerProjectIdRouteImport
-      parentRoute: typeof ViewerRoute
+      parentRoute: typeof rootRouteImport
     }
     '/register': {
       id: '/register'
@@ -253,11 +254,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-const ViewerRouteChildren = {
-  ViewerProjectIdRoute: ViewerProjectIdRoute,
-}
-const ViewerRouteWithChildren = ViewerRoute._addFileChildren(ViewerRouteChildren)
-
 const AdminRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
 }
@@ -269,7 +265,8 @@ const rootRouteChildren: RootRouteChildren = {
   GenerateRoute: GenerateRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
-  ViewerRoute: ViewerRouteWithChildren,
+  ViewerRoute: ViewerRoute,
+  ViewerProjectIdRoute: ViewerProjectIdRoute,
   WorkspaceRoute: WorkspaceRoute,
   ProjectsNewRoute: ProjectsNewRoute,
   AdminRoute: AdminRouteWithChildren,
