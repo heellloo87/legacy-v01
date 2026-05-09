@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as ViewerRouteImport } from './routes/viewer'
+import { Route as ViewerProjectIdRouteImport } from './routes/viewer.$projectId'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GenerateRouteImport } from './routes/generate'
@@ -29,6 +30,11 @@ const ViewerRoute = ViewerRouteImport.update({
   id: '/viewer',
   path: '/viewer',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ViewerProjectIdRoute = ViewerProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => ViewerRoute,
 } as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/viewer': typeof ViewerRoute
+  '/viewer/$projectId': typeof ViewerProjectIdRoute
   '/workspace': typeof WorkspaceRoute
   '/projects/new': typeof ProjectsNewRoute
   '/admin': typeof AdminRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/viewer': typeof ViewerRoute
+  '/viewer/$projectId': typeof ViewerProjectIdRoute
   '/workspace': typeof WorkspaceRoute
   '/projects/new': typeof ProjectsNewRoute
   '/admin': typeof AdminRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/viewer': typeof ViewerRoute
+  '/viewer/$projectId': typeof ViewerProjectIdRoute
   '/workspace': typeof WorkspaceRoute
   '/projects/new': typeof ProjectsNewRoute
   '/admin': typeof AdminRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/viewer'
+    | '/viewer/$projectId'
     | '/workspace'
     | '/projects/new'
     | '/admin'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/viewer'
+    | '/viewer/$projectId'
     | '/workspace'
     | '/projects/new'
     | '/admin'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/viewer'
+    | '/viewer/$projectId'
     | '/workspace'
     | '/projects/new'
     | '/admin'
@@ -174,6 +186,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/viewer'
       preLoaderRoute: typeof ViewerRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/viewer/$projectId': {
+      id: '/viewer/$projectId'
+      path: '/$projectId'
+      fullPath: '/viewer/$projectId'
+      preLoaderRoute: typeof ViewerProjectIdRouteImport
+      parentRoute: typeof ViewerRoute
     }
     '/register': {
       id: '/register'
@@ -234,6 +253,11 @@ declare module '@tanstack/react-router' {
   }
 }
 
+const ViewerRouteChildren = {
+  ViewerProjectIdRoute: ViewerProjectIdRoute,
+}
+const ViewerRouteWithChildren = ViewerRoute._addFileChildren(ViewerRouteChildren)
+
 const AdminRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
 }
@@ -245,7 +269,7 @@ const rootRouteChildren: RootRouteChildren = {
   GenerateRoute: GenerateRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
-  ViewerRoute: ViewerRoute,
+  ViewerRoute: ViewerRouteWithChildren,
   WorkspaceRoute: WorkspaceRoute,
   ProjectsNewRoute: ProjectsNewRoute,
   AdminRoute: AdminRouteWithChildren,
