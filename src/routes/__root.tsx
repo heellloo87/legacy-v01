@@ -82,8 +82,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Legacy Collaborative AR Platform" },
       { name: "twitter:description", content: "Futuristic collaborative product prototyping platform powered by AR and 3D." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/21e97fca-23a8-4694-aea0-a76c2675b2f9" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/21e97fca-23a8-4694-aea0-a76c2675b2f9" },
+      { property: "og:image", content: "https://legacy-v01.heellloo87.workers.dev/og-image.png" },
+      { name: "twitter:image", content: "https://legacy-v01.heellloo87.workers.dev/og-image.png" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
