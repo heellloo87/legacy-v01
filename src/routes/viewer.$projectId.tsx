@@ -406,6 +406,7 @@ function Viewer() {
 
             {fileUrl ? (
               <Canvas
+                key={fileUrl}
                 camera={{
                   position: [0, 0.6, zoom],
                   fov: 50,
