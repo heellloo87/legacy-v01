@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useCallback,
   type ReactNode,
 } from "react";
 
@@ -24,64 +25,33 @@ type AuthCtx = {
   user: User | null;
   role: UserRole | null;
   loading: boolean;
-
-  signIn: (
-    email: string,
-    password: string
-  ) => Promise<{ error?: string }>;
-
-  signUp: (
-    email: string,
-    password: string,
-    fullName: string
-  ) => Promise<{ error?: string }>;
-
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  refreshRole: () => Promise<void>;
 };
 
-const Ctx = createContext<AuthCtx | undefined>(
-  undefined
-);
+const Ctx = createContext<AuthCtx | undefined>(undefined);
 
-export function AuthProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const [session, setSession] =
-    useState<Session | null>(null);
-
-  const [role, setRole] =
-    useState<UserRole | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [role, setRole]       = useState<UserRole | null>(null);
+  const [loading, setLoading] = useState(true);
 
   /* ---------- Auth listener ---------- */
 
   useEffect(() => {
-    const {
-      data: sub,
-    } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-      }
-    );
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        setSession(data.session);
-      })
-      .finally(() => {
-        if (!session?.user) {
-          setLoading(false);
-        }
-      });
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    }).finally(() => {
+      if (!session?.user) setLoading(false);
+    });
 
-    return () => {
-      sub.subscription.unsubscribe();
-    };
+    return () => { sub.subscription.unsubscribe(); };
   }, []);
 
   /* ---------- Load role ---------- */
@@ -104,13 +74,9 @@ export function AuthProvider({
 
       if (error) {
         console.error(error);
-
-        setRole("collaborator");
+        setRole("designer");
       } else {
-        setRole(
-          (data?.role as UserRole) ??
-            "collaborator"
-        );
+        setRole((data?.role as UserRole) ?? "designer");
       }
 
       setLoading(false);
@@ -119,90 +85,69 @@ export function AuthProvider({
     loadRole();
   }, [session]);
 
+  /* ---------- Refresh role (call after admin changes role) ---------- */
+
+  const refreshRole = useCallback(async () => {
+    if (!session?.user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .single();
+    if (data?.role) setRole(data.role as UserRole);
+  }, [session]);
+
   /* ---------- Sign in ---------- */
 
-  const signIn: AuthCtx["signIn"] =
-    async (email, password) => {
-      const { error } =
-        await supabase.auth.signInWithPassword(
-          {
-            email,
-            password,
-          }
-        );
-
-      return error
-        ? { error: error.message }
-        : {};
-    };
+  const signIn: AuthCtx["signIn"] = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return error ? { error: error.message } : {};
+  };
 
   /* ---------- Sign up ---------- */
 
-  const signUp: AuthCtx["signUp"] =
-    async (
+  const signUp: AuthCtx["signUp"] = async (email, password, fullName) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      fullName
-    ) => {
-      const { data, error } =
-        await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
-            data: {
-              full_name: fullName,
-            },
-          },
-        });
+      options: {
+        emailRedirectTo: `${window.location.origin}/dashboard`,
+        data: { full_name: fullName },
+      },
+    });
 
-      if (error) {
-        return {
-          error: error.message,
-        };
-      }
+    if (error) return { error: error.message };
 
-      const userId = data.user?.id;
+    const userId = data.user?.id;
+    if (userId) {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert({ id: userId, full_name: fullName, role: "designer" });
+      if (profileError) console.error(profileError);
+    }
 
-      if (userId) {
-        const { error: profileError } =
-          await supabase
-            .from("profiles")
-            .upsert({
-              id: userId,
-              full_name: fullName,
-              role: "collaborator",
-            });
-
-        if (profileError) {
-          console.error(profileError);
-        }
-      }
-
-      return {};
-    };
+    return {};
+  };
 
   /* ---------- Sign out ---------- */
 
   const signOut = async () => {
     await supabase.auth.signOut();
-
     setRole(null);
     setSession(null);
   };
 
   return (
-    <Ctx.Provider
-      value={{
-        session,
-        user: session?.user ?? null,
-        role,
-        loading,
-        signIn,
-        signUp,
-        signOut,
-      }}
-    >
+    <Ctx.Provider value={{
+      session,
+      user: session?.user ?? null,
+      role,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+      refreshRole,
+    }}>
       {children}
     </Ctx.Provider>
   );
@@ -210,12 +155,6 @@ export function AuthProvider({
 
 export function useAuth() {
   const ctx = useContext(Ctx);
-
-  if (!ctx) {
-    throw new Error(
-      "useAuth must be used inside AuthProvider"
-    );
-  }
-
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }
