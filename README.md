@@ -227,6 +227,6 @@ Planned for v2:
 
 <div align="center">
 
-Built with React, Supabase, and Three.js &nbsp;·&nbsp; Deployed on Cloudflare Workers
+Frontend scaffolding partially built with [Lovable](https://lovable.dev) &nbsp;·&nbsp; Built with React, Supabase, and Three.js &nbsp;·&nbsp; Deployed on Cloudflare Workers
 
 </div>
