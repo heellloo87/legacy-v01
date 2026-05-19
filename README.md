@@ -72,7 +72,6 @@
 ---
 
 ## ✦ Tech Stack
-## ✦ Tech Stack
 
 **Frontend**
 | | |
@@ -180,7 +179,7 @@ Storage bucket `project-assets` with scoped policies for `covers/` and `designs/
 
 ```bash
 # Clone
-git clone https://github.com/your-username/legacy-ar.git
+git clone https://github.com/Zabi-01/legacy-ar.git
 cd legacy-ar
 
 # Install
@@ -229,6 +228,6 @@ Planned for v2:
 
 <div align="center">
 
-Frontend scaffolding partially built with [Lovable](https://lovable.dev) &nbsp;·&nbsp; Built with React, Supabase, and Three.js &nbsp;·&nbsp; Deployed on Cloudflare Workers
+Built by **[@Zabi-01](https://github.com/Zabi-01)** &nbsp;·&nbsp; Frontend scaffolding partially built with [Lovable](https://lovable.dev) &nbsp;·&nbsp; Built with React, Supabase, and Three.js &nbsp;·&nbsp; Deployed on Cloudflare Workers
 
 </div>
